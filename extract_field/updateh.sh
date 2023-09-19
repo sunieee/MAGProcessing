@@ -1,0 +1,20 @@
+# python update_top_author_field_hIndex.py scigene_ComputerSecurity_field 5000
+# python update_top_author_field_hIndex.py scigene_DataMining_field 5000
+# python update_top_author_field_hIndex.py scigene_HCI_field 5000
+# python update_top_author_field_hIndex.py scigene_ProgrammingLanguage_field 5000
+# python update_top_author_field_hIndex.py scigene_SoftwareEngineering_field 5000
+# python update_top_author_field_hIndex.py scigene_database_field 5000
+# python update_top_author_field_hIndex.py scigene_SpeechRecognition_field 5000
+# python update_top_author_field_hIndex.py scigene_TheoreticalComputerScience_field 5000
+# python update_top_author_field_hIndex.py scigene_NLP_field 5000
+
+python set_fellow.py scigene_ComputerSecurity_field
+python set_fellow.py scigene_DataMining_field
+python set_fellow.py scigene_HCI_field
+python set_fellow.py scigene_ProgrammingLanguage_field
+python set_fellow.py scigene_SoftwareEngineering_field
+python set_fellow.py scigene_database_field
+python set_fellow.py scigene_SpeechRecognition_field
+python set_fellow.py scigene_TheoreticalComputerScience_field
+python set_fellow.py scigene_NLP_field
+python set_fellow.py scigene_ComputerSecurity_field
