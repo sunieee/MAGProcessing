@@ -1,31 +1,20 @@
-import os
-import re
-import string
-import json
 import math
-import sys
+from utils import *
 
-# curPath = os.path.abspath(os.path.dirname(__file__))
-# rootPath = os.path.split(curPath)[0]
-# sys.path.append(curPath)
-
-from odbcdb import *
-
-# TODO
-import pymysql
-tempconn = pymysql.connect(host='localhost', user="root", passwd="Vis_2014", db="scigene_visualization_field", charset="utf8")
-tempcur = tempconn.cursor()
+connField = pymysql.connect(host='localhost',
+                            port=3306,
+                            user='root',
+                            password='root',
+                            db=f"scigene_{fieldName}_field",
+                            charset='utf8')
+cursorField = connField.cursor()
 
 MIN_STUDENT_AUTHOR_ORDER = 3
-
 MIN_SUPERVISOR_RATE = 0.5
-
 MIN_SUPERVISED_RATE = 0.6
 MIN_SUPERVISING_RATE = 1
-
 MIN_SUPERVISED_YEAR_SPAN = 2
 MIN_SUPERVISED_PAPER_SPAN = 2.1
-
 MAX_SUPERVISED_YEAR = 6
 HALF_SUPERVISED_YEAR = 3
 MAX_YEAR = 1000
@@ -67,163 +56,66 @@ for i in range(MAX_PAPER):
         )
 
 
-def computeSupervisorRate(
-    studentID,
-    supervisorID,
-    year,
-    firstAuthorPaperCountMap,
-    firstAuthorWeightedPaperCountMap,
-    coAuthorWeightedPaperCountMap,
-    coAuthorPaperCountMap,
-    topAuthorPaperCountMap,
-    paperID
-):
+def compute_count_list(academic_year_list, paper_count_map, start_list=None):
+    count_list = {0: 0}
+    for i in range(1, len(academic_year_list)):
+        count = paper_count_map.get(academic_year_list[i - 1], 0)
+        if start_list:
+            count *= min(SUPERVISED_YEAR_MODIFIER[i - 1], SUPERVISED_PAPER_MODIFIER[int(start_list[i - 1])])
+        count_list[i] = count_list[i - 1] + count
+    return count_list
 
-    # TODO
-    if studentID == '':
-        sql = "select authorOrder from paper_author_field where paperID='%s' and authorID='%s'" % (paperID, supervisorID)
-        try:
-            print(sql)
-            tempcur.execute(sql)
-            result = tempcur.fetchone()
-            print(result[0])
-            return 1 / float(result[0])
-        except:
-            print("error")
-            exit(0)
-        # return 0.0
 
-    # compute supervised rate
+def compute_total_count(paper_count_map, year):
+    academic_year_list = sorted(paper_count_map.keys())
+    current_year_index = academic_year_list.index(year)
+    
+    total_count = 0
+    for i in range(current_year_index):
+        total_count += paper_count_map.get(academic_year_list[i], 0)
+    return total_count
 
-    studentPaperCountMap = firstAuthorPaperCountMap[studentID]
+
+def compute_supervisor_rate(studentID, supervisorID, year, paperID):
+    if not studentID:
+        cursorField.execute("select authorOrder from paper_author_field where paperID='%s' and authorID='%s'" % (paperID, supervisorID))
+        return 1 / float(cursorField.fetchone()[0])
 
     # the sorted list of years that the student has paper publication, truncated to {0,1,..., MAX_ACADEMIC_YEAR}
-    studentAcademicYearList = sorted(studentPaperCountMap.keys())[
-        0 : MAX_ACADEMIC_YEAR + 1
-    ]
-    max_student_academic_year = len(studentAcademicYearList) - 1
-
-    if not (year in studentAcademicYearList):
+    student_academic_years = sorted(firstAuthorPaperCountMap[studentID].keys())[: MAX_ACADEMIC_YEAR + 1]
+    if not (year in student_academic_years):
         return 0.0
-
-    currentAcademicYearIndex = studentAcademicYearList.index(year)
-
-    studentWeightedPaperCountMap = firstAuthorWeightedPaperCountMap[studentID]
-
-    coAuthorID = studentID + "-" + supervisorID
-    studentCoAuthorWeightedPaperCountMap = coAuthorWeightedPaperCountMap[coAuthorID]
+    
+    currentAcademicYearIndex = student_academic_years.index(year)
+    coAuthorID = f"{studentID}-{supervisorID}"
+    faWeightedPaperCountMap = firstAuthorWeightedPaperCountMap[studentID]
+    caWeightedPaperCountMap = coAuthorWeightedPaperCountMap[coAuthorID]
+    
+    start_student_count, _ = compute_count_list(student_academic_years, faWeightedPaperCountMap)
+    end_student_count, _ = compute_count_list(student_academic_years[::-1], faWeightedPaperCountMap)[::-1]
 
     # the same as below except that co-author weighted count is replaced by student weighted count
+    total_student_count = start_student_count[currentAcademicYearIndex] + end_student_count[currentAcademicYearIndex] \
+        + faWeightedPaperCountMap[student_academic_years[currentAcademicYearIndex]];
 
-    start_student_count_list = {}
-    end_student_count_list = {}
-    total_student_count = 0
-
-    start_student_count_list[0] = 0
-    for i in range(1, max_student_academic_year + 1):
-        if studentAcademicYearList[i - 1] in studentWeightedPaperCountMap:
-            start_student_count_list[i] = (
-                start_student_count_list[i - 1]
-                + studentWeightedPaperCountMap[studentAcademicYearList[i - 1]]
-            )
-        else:
-            start_student_count_list[i] = start_student_count_list[i - 1]
-
-    end_student_count_list[max_student_academic_year] = 0
-    for i in range(max_student_academic_year - 1, currentAcademicYearIndex - 1, -1):
-        if studentAcademicYearList[i + 1] in studentWeightedPaperCountMap:
-            end_student_count_list[i] = (
-                end_student_count_list[i + 1]
-                + studentWeightedPaperCountMap[studentAcademicYearList[i + 1]]
-            )
-        else:
-            end_student_count_list[i] = end_student_count_list[i + 1]
-
-    total_student_count = (
-        start_student_count_list[currentAcademicYearIndex]
-        + end_student_count_list[currentAcademicYearIndex]
-        + studentWeightedPaperCountMap[
-            studentAcademicYearList[currentAcademicYearIndex]
-        ]
-    )
-
-    # start_list[N] = accumulated weighted co-author paper count from academic year 0 to N-1, excluding the year N, N <= current_academic_year
-    # end_list[N] = accumulated weighted co-author paper count from academic year N to MAX_ACADEMIC_YEAR, excluding the year N, N >= current_academic_year
-
-    start_coauthor_count_list = {}
-    end_coauthor_count_list = {}
-    total_coauthor_count = 0
-
-    start_coauthor_count_year_list = {}
-    end_coauthor_count_year_list = {}
-    total_coauthor_count_year = 0
-
-    start_coauthor_count_list[0] = 0
-    start_coauthor_count_year_list[0] = 0
-
-    for i in range(1, currentAcademicYearIndex + 1):
-        if studentAcademicYearList[i - 1] in studentCoAuthorWeightedPaperCountMap:
-            start_coauthor_count_list[i] = start_coauthor_count_list[
-                i - 1
-            ] + studentCoAuthorWeightedPaperCountMap[
-                studentAcademicYearList[i - 1]
-            ] * min(
-                SUPERVISED_YEAR_MODIFIER[i - 1],
-                SUPERVISED_PAPER_MODIFIER[int(start_student_count_list[i - 1])],
-            )
-            start_coauthor_count_year_list[i] = (
-                start_coauthor_count_year_list[i - 1] + 1
-            )
-        else:
-            start_coauthor_count_list[i] = start_coauthor_count_list[i - 1]
-            start_coauthor_count_year_list[i] = start_coauthor_count_year_list[i - 1]
-
-    end_coauthor_count_list[max_student_academic_year] = 0
-    end_coauthor_count_year_list[max_student_academic_year] = 0
-
-    for i in range(max_student_academic_year - 1, currentAcademicYearIndex - 1, -1):
-        if studentAcademicYearList[i + 1] in studentCoAuthorWeightedPaperCountMap:
-            end_coauthor_count_list[i] = end_coauthor_count_list[
-                i + 1
-            ] + studentCoAuthorWeightedPaperCountMap[
-                studentAcademicYearList[i + 1]
-            ] * min(
-                SUPERVISED_YEAR_MODIFIER[i + 1],
-                SUPERVISED_PAPER_MODIFIER[int(start_student_count_list[i + 1])],
-            )
-            end_coauthor_count_year_list[i] = end_coauthor_count_year_list[i + 1] + 1
-        else:
-            end_coauthor_count_list[i] = end_coauthor_count_list[i + 1]
-            end_coauthor_count_year_list[i] = end_coauthor_count_year_list[i + 1]
+    start_coauthor_count = compute_count_list(student_academic_years, caWeightedPaperCountMap, start_student_count)
+    end_coauthor_count = compute_count_list(student_academic_years[::-1], caWeightedPaperCountMap, start_student_count)[::-1]
 
     total_coauthor_count = (
-        start_coauthor_count_list[currentAcademicYearIndex]
-        + end_coauthor_count_list[currentAcademicYearIndex]
-        + studentCoAuthorWeightedPaperCountMap[
-            studentAcademicYearList[currentAcademicYearIndex]
+        start_coauthor_count[currentAcademicYearIndex] + end_coauthor_count[currentAcademicYearIndex]
+        + caWeightedPaperCountMap[
+            student_academic_years[currentAcademicYearIndex]
         ]
-        * min(
-            SUPERVISED_YEAR_MODIFIER[currentAcademicYearIndex],
-            SUPERVISED_PAPER_MODIFIER[
-                int(start_student_count_list[currentAcademicYearIndex])
-            ],
+        * min(SUPERVISED_YEAR_MODIFIER[currentAcademicYearIndex],
+            SUPERVISED_PAPER_MODIFIER[int(start_student_count[currentAcademicYearIndex])],
         )
     )
 
-    total_coauthor_count_year = (
-        start_coauthor_count_year_list[currentAcademicYearIndex]
-        + end_coauthor_count_year_list[currentAcademicYearIndex]
-        + 1
-    )
-
     # iterate all possible year span (window) to compute the max supervisedRate
-
     maxSupervisedRate = 0.0
 
     for start_year_index in range(0, currentAcademicYearIndex + 1):
-        for end_year_index in range(
-            currentAcademicYearIndex, max_student_academic_year + 1
-        ):
+        for end_year_index in range(currentAcademicYearIndex, len(student_academic_years)):
             # there is a problem here: the co-authorship can happen in the same year,
             # because the surrounding years may not have co-authorship between student and supervisor
             # then the small window with year_span >= 2 can still be the maximal because the co-authorship
@@ -234,77 +126,26 @@ def computeSupervisorRate(
             if (end_year_index - start_year_index + 1) < MIN_SUPERVISED_YEAR_SPAN:
                 continue
 
-            coauthor_count_year = (
-                total_coauthor_count_year
-                - start_coauthor_count_year_list[start_year_index]
-                - end_coauthor_count_year_list[end_year_index]
-            )
-
-            if coauthor_count_year < MIN_SUPERVISED_YEAR_SPAN:
-                continue
-
-            denominator = (
-                total_student_count
-                - start_student_count_list[start_year_index]
-                - end_student_count_list[end_year_index]
-            )
-
+            denominator =  total_student_count - start_student_count[start_year_index] - end_student_count[end_year_index]
             if denominator < MIN_SUPERVISED_PAPER_SPAN:
                 continue
 
-            numerator = (
-                total_coauthor_count
-                - start_coauthor_count_list[start_year_index]
-                - end_coauthor_count_list[end_year_index]
-            )
-
+            numerator =  total_coauthor_count - start_coauthor_count[start_year_index] - end_coauthor_count[end_year_index]
             supervisedRate = numerator / denominator
 
-            if supervisedRate > maxSupervisedRate:
-                maxSupervisedRate = supervisedRate
+            maxSupervisedRate = max(maxSupervisedRate, supervisedRate)
 
     maxSupervisedRate = min(1.0, maxSupervisedRate / MIN_SUPERVISED_RATE)
 
     # compute supervising rate
-
-    supervisorPaperCountMap = topAuthorPaperCountMap[supervisorID]
-
-    # the sorted list of years that the supervisor has paper publication
-
-    supervisorAcademicYearList = sorted(supervisorPaperCountMap.keys())
-    currentAcademicYearIndex = supervisorAcademicYearList.index(year)
-
-    total_supervisor_count = 0
-    for i in range(currentAcademicYearIndex):
-        total_supervisor_count = (
-            total_supervisor_count
-            + supervisorPaperCountMap[supervisorAcademicYearList[i]]
-        )
-
-    coAuthorID = studentID + "-" + supervisorID
-    studentCoAuthorPaperCountMap = coAuthorPaperCountMap[coAuthorID]
-
-    coAuthorAcademicYearList = sorted(studentCoAuthorPaperCountMap.keys())
-    currentAcademicYearIndex = coAuthorAcademicYearList.index(year)
-
-    total_coauthor_count = 0
-    for i in range(currentAcademicYearIndex):
-        total_coauthor_count = (
-            total_coauthor_count
-            + studentCoAuthorPaperCountMap[coAuthorAcademicYearList[i]]
-        )
-
-    supervisingRate = 0.0
-
+    total_supervisor_count = compute_total_count(topAuthorPaperCountMap[supervisorID], year)
+    total_coauthor_count = compute_total_count(coAuthorPaperCountMap[coAuthorID], year)
+    
     denominator = total_coauthor_count
     numerator = total_supervisor_count - total_coauthor_count
 
     if numerator < 0:
-        print(
-            "Error in computation, supervisor paper count smaller than co-author paper count:",
-            studentID,
-            supervisorID,
-        )
+        print(f"Error in computation, supervisor paper count smaller than co-author paper count: {studentID}, {supervisorID}")
         supervisingRate = 0.0
     elif numerator == 0:
         supervisingRate = 0.0
@@ -318,214 +159,155 @@ def computeSupervisorRate(
     return maxSupervisedRate * supervisingRate
 
 
-# settings
-# reload(sys)
-# sys.setdefaultencoding("utf-8")
-
-host = "127.0.0.1"
-port = "3306"
-database = "scigene_$$fieldNAME$$_field_pcg"
-usr = "root"
-pwd = "Vis_2014"
-
-numOfTopAuthors = 1000
-
-field_NAME = "$$fieldNAME$$"
-field_AUTHOR = "$$fieldAUTHOR$$"
-NUM_TOP_AUTHORS = "$$NUMTOPAUTHORS$$"
-
-MIN_STUDENT_AUTHOR_ORDER_STRING = "$$MINSTUDENTAUTHORORDER$$"
-
-createFirstAuthorTmp = "create table firstAuthorTmp select PA2.authorID as firstAuthorID, PA1.authorID as topAuthorID from scigene_$$fieldNAME$$_field.authors_field as A join scigene_$$fieldNAME$$_field.paper_author_field as PA1 on A.authorID = PA1.authorID join scigene_$$fieldNAME$$_field.paper_author_field as PA2 on PA1.paperID = PA2.paperID where authorRank <= $$NUMTOPAUTHORS$$ and PA1.authorOrder > 1 and PA2.authorOrder = 1 group by PA2.authorID, PA1.authorID;"
-createFirstAuthorIndex = (
-    "create index first_author_index on firstAuthorTmp(firstAuthorID);"
-)
-createTopAuthorIndex = "create index top_author_index on firstAuthorTmp(topAuthorID);"
-selectFirstAuthorPaperCount = "select authorID, authorOrder, year, count(*) as cnt from scigene_$$fieldNAME$$_field.paper_author_field as PA, scigene_$$fieldNAME$$_field.papers_field as P where authorID in (select distinct firstAuthorID from firstAuthorTmp) and PA.paperID = P.paperID group by authorID, authorOrder, year;"
-selectFirstTopCoAuthorPaperCount = "select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, count(*) as cnt from firstAuthorTmp join scigene_$$fieldNAME$$_field.paper_author_field as PA1 on firstAuthorID = PA1.authorID join scigene_$$fieldNAME$$_field.paper_author_field as PA2 on topAuthorID = PA2.authorID and PA1.paperID = PA2.paperID and PA1.authorOrder <= $$MINSTUDENTAUTHORORDER$$ and PA1.authorOrder < PA2.authorOrder join scigene_$$fieldNAME$$_field.papers_field as P on PA1.paperID = P.paperID group by firstAuthorID, topAuthorID, PA1.authorOrder, year;"
-selectTopAuthorPaperCount = "select A.authorID, year, count(*) as cnt from scigene_$$fieldNAME$$_field.authors_field as A join scigene_$$fieldNAME$$_field.paper_author_field as PA on authorRank <= $$NUMTOPAUTHORS$$ and A.authorID = PA.authorID  join scigene_$$fieldNAME$$_field.papers_field as P on PA.paperID = P.paperID group by A.authorID, year;"
-
-dropTmpTable = "drop table firstAuthorTmp;"
-
-if len(sys.argv) >= 2:
-    fieldName = str(sys.argv[1])
-
-if len(sys.argv) >= 3:
-    numOfTopAuthors = int(sys.argv[2])
-
-if len(sys.argv) >= 4:
-    MIN_SUPERVISOR_RATE = float(sys.argv[3])
-
-database = database.replace(field_NAME, fieldName)
-
-selectFirstAuthorPaperCount = selectFirstAuthorPaperCount.replace(field_NAME, fieldName)
-
-selectFirstTopCoAuthorPaperCount = selectFirstTopCoAuthorPaperCount.replace(
-    MIN_STUDENT_AUTHOR_ORDER_STRING, str(MIN_STUDENT_AUTHOR_ORDER)
-).replace(field_NAME, fieldName)
-
-createFirstAuthorTmp = createFirstAuthorTmp.replace(
-    NUM_TOP_AUTHORS, str(numOfTopAuthors)
-).replace(field_NAME, fieldName)
-selectTopAuthorPaperCount = selectTopAuthorPaperCount.replace(
-    NUM_TOP_AUTHORS, str(numOfTopAuthors)
-).replace(field_NAME, fieldName)
-
-conn = ConnectMySQLDB(host, port, database, usr, pwd)
-db_cursor = conn.cursor()
-
 # pre-compute some maps
+######################################################################
+# 从数据库中查询某个领域的论文作者信息，并基于查询结果构建两个映射：
+# 1. firstAuthorPaperCountMap：映射每个作者ID到一个子映射，其中子映射的键是年份，值是该年份的论文数量。
+# 2. firstAuthorWeightedPaperCountMap：与上面的映射类似，但值是加权的论文数量，
+#       其中权重是1/作者顺序，但仅考虑作者顺序小于或等于MIN_STUDENT_AUTHOR_ORDER的作者。
+######################################################################
 
 try:
-    db_cursor.execute(createFirstAuthorTmp)
-    conn.commit()
-    db_cursor.execute(createFirstAuthorIndex)
-    conn.commit()
-    db_cursor.execute(createTopAuthorIndex)
-    conn.commit()
+    execute(f"""
+create table firstAuthorTmp 
+    select PA2.authorID as firstAuthorID, PA1.authorID as topAuthorID 
+    from scigene_{fieldName}_field.authors_field as A 
+    join scigene_{fieldName}_field.paper_author_field as PA1 on A.authorID = PA1.authorID 
+    join scigene_{fieldName}_field.paper_author_field as PA2 on PA1.paperID = PA2.paperID 
+    where {filterCondition} 
+        and PA1.authorOrder > 1 and PA2.authorOrder = 1 
+    group by PA2.authorID, PA1.authorID;
+            
+create index first_author_index on firstAuthorTmp(firstAuthorID);
+            
+create index top_author_index on firstAuthorTmp(topAuthorID);""")
 except:
-    print("FirstAuthorTmp is existed")
+    print("FirstAuthorTmp exists")
 
 print("Create temp table for the list of first authors!")
 
-db_cursor.execute(selectFirstAuthorPaperCount)
-rows = db_cursor.fetchall()
+cursor.execute(f"""
+select authorID, authorOrder, year, count(*) as cnt 
+    from scigene_{fieldName}_field.paper_author_field as PA, 
+        scigene_{fieldName}_field.papers_field as P 
+    where authorID in (select distinct firstAuthorID from firstAuthorTmp) and PA.paperID = P.paperID 
+    group by authorID, authorOrder, year;""")
+rows = cursor.fetchall()
 
+# 初始化映射
 firstAuthorPaperCountMap = {}
 firstAuthorWeightedPaperCountMap = {}
 
-for row in rows:
-    authorID = row[0].strip()
-    authorOrder = int(row[1])
-    year = int(row[2])
-    count = int(row[3])
+for authorID, authorOrder, year, count in rows:
+    authorID = authorID.strip()
+    authorOrder = int(authorOrder)
+    year = int(year)
+    count = int(count)
 
-    yearCountMap = None
-    if authorID in firstAuthorPaperCountMap:
-        yearCountMap = firstAuthorPaperCountMap[authorID]
-    else:
-        yearCountMap = {}
-        firstAuthorPaperCountMap[authorID] = yearCountMap
+    # 更新firstAuthorPaperCountMap
+    yearCountMap = firstAuthorPaperCountMap.setdefault(authorID, {})
+    yearCountMap[year] = yearCountMap.get(year, 0) + count
 
-    if year in yearCountMap:
-        yearCountMap[year] = yearCountMap[year] + count
-    else:
-        yearCountMap[year] = count
+    # 更新firstAuthorWeightedPaperCountMap
+    if authorOrder <= MIN_STUDENT_AUTHOR_ORDER:
+        yearWeightedCountMap = firstAuthorWeightedPaperCountMap.setdefault(authorID, {})
+        yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
 
-    if authorOrder > MIN_STUDENT_AUTHOR_ORDER:
-        continue
 
-    yearCountMap = None
-    if authorID in firstAuthorWeightedPaperCountMap:
-        yearCountMap = firstAuthorWeightedPaperCountMap[authorID]
-    else:
-        yearCountMap = {}
-        firstAuthorWeightedPaperCountMap[authorID] = yearCountMap
-
-    if year in yearCountMap:
-        yearCountMap[year] = yearCountMap[year] + count / authorOrder
-    else:
-        yearCountMap[year] = count / authorOrder
-
+######################################################################
+# 从数据库中查询某个领域的论文合作者信息，并基于查询结果构建两个映射：
+# 1. coAuthorWeightedPaperCountMap：映射每个合作者ID对（由两个作者ID组成）到一个子映射，
+#   其中子映射的键是年份，值是加权的论文数量，其中权重是1/作者顺序。
+# 2. coAuthorPaperCountMap：与上面的映射类似，但值是该年份的论文数量。
+######################################################################
 print("Pre-compute first-author maps!")
 
-db_cursor.execute(selectFirstTopCoAuthorPaperCount)
-rows = db_cursor.fetchall()
+cursor.execute(f"""
+select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, count(*) as cnt 
+    from firstAuthorTmp 
+    join scigene_{fieldName}_field.paper_author_field as PA1 on firstAuthorID = PA1.authorID 
+    join scigene_{fieldName}_field.paper_author_field as PA2 on topAuthorID = PA2.authorID 
+        and PA1.paperID = PA2.paperID and PA1.authorOrder <= {MIN_STUDENT_AUTHOR_ORDER} 
+        and PA1.authorOrder < PA2.authorOrder 
+    join scigene_{fieldName}_field.papers_field as P on PA1.paperID = P.paperID 
+    group by firstAuthorID, topAuthorID, PA1.authorOrder, year;
+""")
+rows = cursor.fetchall()
 
 coAuthorWeightedPaperCountMap = {}
 coAuthorPaperCountMap = {}
 
-for row in rows:
-    coAuthorID = row[0].strip() + "-" + row[1].strip()
-    authorOrder = int(row[2])
-    year = int(row[3])
-    count = int(row[4])
+# 处理查询结果
+for firstAuthorID, topAuthorID, authorOrder, year, count in rows:
+    coAuthorID = f"{firstAuthorID.strip()}-{topAuthorID.strip()}"
+    authorOrder = int(authorOrder)
+    year = int(year)
+    count = int(count)
 
-    yearCountMap = None
-    if coAuthorID in coAuthorWeightedPaperCountMap:
-        yearCountMap = coAuthorWeightedPaperCountMap[coAuthorID]
-    else:
-        yearCountMap = {}
-        coAuthorWeightedPaperCountMap[coAuthorID] = yearCountMap
+    # 更新coAuthorWeightedPaperCountMap
+    yearWeightedCountMap = coAuthorWeightedPaperCountMap.setdefault(coAuthorID, {})
+    yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
 
-    if year in yearCountMap:
-        yearCountMap[year] = yearCountMap[year] + count / authorOrder
-    else:
-        yearCountMap[year] = count / authorOrder
+    # 更新coAuthorPaperCountMap
+    yearCountMap = coAuthorPaperCountMap.setdefault(coAuthorID, {})
+    yearCountMap[year] = yearCountMap.get(year, 0) + count
 
-    yearCountMap = None
-    if coAuthorID in coAuthorPaperCountMap:
-        yearCountMap = coAuthorPaperCountMap[coAuthorID]
-    else:
-        yearCountMap = {}
-        coAuthorPaperCountMap[coAuthorID] = yearCountMap
 
-    if year in yearCountMap:
-        yearCountMap[year] = yearCountMap[year] + count
-    else:
-        yearCountMap[year] = count
-
+######################################################################
+# 这段代码的目的是处理查询结果，并基于这些结果构建一个映射topAuthorPaperCountMap。
+# 这个映射的键是作者ID，值是另一个映射，其中子映射的键是年份，值是该年份的论文数量。
+######################################################################
 print("Pre-compute co-author maps!")
 
-db_cursor.execute(selectTopAuthorPaperCount)
-rows = db_cursor.fetchall()
+cursor.execute(f"""
+select A.authorID, year, count(*) as cnt 
+    from scigene_{fieldName}_field.authors_field as A 
+    join scigene_{fieldName}_field.paper_author_field as PA 
+        on {filterCondition}
+        and A.authorID = PA.authorID  
+    join scigene_{fieldName}_field.papers_field as P on PA.paperID = P.paperID 
+    group by A.authorID, year;""")
+rows = cursor.fetchall()
 
 topAuthorPaperCountMap = {}
 
-for row in rows:
-    authorID = row[0].strip()
-    year = int(row[1])
-    count = int(row[2])
+for authorID, year, count in rows:
+    authorID = authorID.strip()
+    year = int(year)
+    count = int(count)
 
-    yearCountMap = None
-    if authorID in topAuthorPaperCountMap:
-        yearCountMap = topAuthorPaperCountMap[authorID]
-    else:
-        yearCountMap = {}
-        topAuthorPaperCountMap[authorID] = yearCountMap
+    # 更新topAuthorPaperCountMap
+    yearCountMap = topAuthorPaperCountMap.setdefault(authorID, {})
+    yearCountMap[year] = yearCountMap.get(year, 0) + count
 
-    if year in yearCountMap:
-        yearCountMap[year] = yearCountMap[year] + count
-    else:
-        yearCountMap[year] = count
 
+
+######################################################################
+# 从数据库中查询某个领域的前几名作者。
+# 对于每位作者，查询他们的论文信息。
+# 对于每篇论文，确定它是否是一个“关键论文”（key paper）。
+#       如果第一作者就是当前的顶级作者，则该论文被标记为关键论文。
+#       否则，它会计算一个监督率（supervisor rate），并基于这个率来决定是否标记为关键论文。
+# 更新数据库中的论文记录，标记它是否是关键论文。
+# 提交数据库更改。
+######################################################################
 print("Pre-compute top author maps!")
 
-# select all top field authors
-
-selectTopfieldAuthors = "select authorID, name, authorRank from scigene_$$fieldNAME$$_field.authors_field where authorRank <= $$NUMTOPAUTHORS$$;"
-selectTopfieldAuthors = selectTopfieldAuthors.replace(
-    NUM_TOP_AUTHORS, str(numOfTopAuthors)
-).replace(field_NAME, fieldName)
-
-selectTopAuthorPapers = (
-    "select paperID, year, firstAuthorID from papers_$$fieldAUTHOR$$"
-)
-updateTopAuthorPapers = (
-    "update papers_$$fieldAUTHOR$$ set isKeyPaper = ? where paperID = ?"
-)
-
-db_cursor.execute(selectTopfieldAuthors)
-rows = db_cursor.fetchall()
+cursor.execute(f"""
+select authorID, name, authorRank 
+    from scigene_{fieldName}_field.authors_field 
+    where {filterCondition};""")
+rows = cursor.fetchall()
 
 # process each author
-for row in rows:
-
-    topAuthorID = str(row[0].strip())
-    authorName = str(row[1].strip())
-    rank = int(row[2])
+for topAuthorID, authorName, rank in rows:
+    topAuthorID = topAuthorID.strip()
+    authorName = authorName.strip()
+    rank = int(rank)
 
     authorTableName = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
-
-    selectTopAuthorPapers_author = selectTopAuthorPapers.replace(
-        field_AUTHOR, authorTableName
-    )
-    updateTopAuthorPapers_author = updateTopAuthorPapers.replace(
-        field_AUTHOR, authorTableName
-    )
-
-    db_cursor.execute(selectTopAuthorPapers_author)
-    paper_rows = db_cursor.fetchall()
+    cursor.execute(f"select paperID, year, firstAuthorID from papers_{authorTableName}")
+    paper_rows = cursor.fetchall()
 
     print(authorName)
     # process each paper of the author
@@ -535,49 +317,27 @@ for row in rows:
         paperYear = int(paper_row[1])
         firstAuthorID = str(paper_row[2].strip())
 
-        isKeyPaper = 0
-
         if firstAuthorID == topAuthorID:
             isKeyPaper = 1
         else:
             try:
-                supervisor_rate = computeSupervisorRate(
-                    firstAuthorID,
-                    topAuthorID,
-                    paperYear,
-                    firstAuthorPaperCountMap,
-                    firstAuthorWeightedPaperCountMap,
-                    coAuthorWeightedPaperCountMap,
-                    coAuthorPaperCountMap,
-                    topAuthorPaperCountMap,
-                    paperID                         # TODO
-                )
+                isKeyPaper = compute_supervisor_rate(firstAuthorID, topAuthorID, paperYear, paperID)
             except:
                 print(firstAuthorID)
                 print(topAuthorID)
                 # print(firstAuthorPaperCountMap)
                 exit(0)
 
-            # if supervisor_rate >= MIN_SUPERVISOR_RATE:
-            #     isKeyPaper = supervisor_rate
+        cursor.execute(f"update papers_{authorTableName} set isKeyPaper = ? where paperID = ?", isKeyPaper, paperID)
 
-            isKeyPaper = supervisor_rate
-
-        db_cursor.execute(updateTopAuthorPapers_author, isKeyPaper, paperID)
-
-    print(
-        "Update key papers for field author ",
-        authorName,
-        " with rank ",
-        str(rank),
-        ":",
-        authorTableName,
-    )
+    print(f"Update key papers for field author {authorName} with rank {rank}: authorTableName",)
     conn.commit()
 
-db_cursor.execute(dropTmpTable)
+cursor.execute("drop table firstAuthorTmp;")
 conn.commit()
-db_cursor.close()
-conn.close()
 
-tempconn.close()
+
+cursor.close()
+cursorField.close()
+conn.close()
+connField.close()

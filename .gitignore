@@ -3,3 +3,4 @@ out
 merge/out
 __pycache__
 data
+*.json

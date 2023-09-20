@@ -60,11 +60,11 @@ result=model.predict_proba(db2)[:,1]
 ![47d5e9e30a8bfc31b5929caeb72349a](https://github.com/sunieee/ARC/assets/42105752/218f75fd-2220-4e52-b7a3-3e184666e750)
 
 
-方案一：将少的合并到大的之中，在paper_author_field中修改author_id，重新刷新一下统计信息：#paper, #citation, hIndex
+如果不修改任何有关数据库，直接后处理合并生成的多张表格是不行的。因为在计算点概率的过程中用到了author表与coauthor的联合查询，合并之后影响点概率的计算，因此必须在第二步之前就必须将两人合为一人！
 
-方案二：不修改任何有关数据库，直接**后处理**合并生成的多张表格
-
-因为需要修改领域数据库，paper_author_field表格中authorRank会变动，造成后续排名不准确
+将少的合并到大的之中，步骤为：
+- 修改领域数据库：在paper_author_field中修改author_id，重新刷新一下统计信息：#paper, #citation, hIndex
+- 重新生成点概率：
 
 
 ## 增量更新
