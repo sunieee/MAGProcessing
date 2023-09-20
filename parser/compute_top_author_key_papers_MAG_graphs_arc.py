@@ -13,13 +13,13 @@ from odbcdb import *
 
 MIN_STUDENT_AUTHOR_ORDER = 3
 
-MIN_SUPERVISOR_RATE = 0.3
+MIN_SUPERVISOR_RATE = 0.5
 
 MIN_SUPERVISED_RATE = 0.6
-MIN_SUPERVISING_RATE = 2
+MIN_SUPERVISING_RATE = 1
 
-MIN_SUPERVISED_YEAR_SPAN = 2.1
-MIN_SUPERVISED_PAPER_SPAN = 2.1
+MIN_SUPERVISED_YEAR_SPAN = 2
+MIN_SUPERVISED_PAPER_SPAN = 2
 
 MAX_SUPERVISED_YEAR = 6
 HALF_SUPERVISED_YEAR = 3
@@ -304,44 +304,52 @@ def computeSupervisorRate(
 
 host = "127.0.0.1"
 port = "3306"
-database = "scigene_acl_anthology_pcg"
+database = "scigene_$$fieldNAME$$_anthology_pcg"
 usr = "root"
 pwd = "Vis_2014"
 
-numOfTopAuthors = 1000
+numOfTopAuthors = 200
 
-ARC_AUTHOR = "$$ARCAUTHOR$$"
+field_NAME = "$$fieldNAME$$"
+field_AUTHOR = "$$fieldAUTHOR$$"
 NUM_TOP_AUTHORS = "$$NUMTOPAUTHORS$$"
 
 MIN_STUDENT_AUTHOR_ORDER_STRING = "$$MINSTUDENTAUTHORORDER$$"
 
-createFirstAuthorTmp = "create table firstAuthorTmp select PA2.authorID as firstAuthorID, PA1.authorID as topAuthorID from scigene_acl_anthology.authors_ARC as A join scigene_acl_anthology.paper_author_ARC as PA1 on A.authorID = PA1.authorID join scigene_acl_anthology.paper_author_ARC as PA2 on PA1.paperID = PA2.paperID where authorRank <= $$NUMTOPAUTHORS$$ and PA1.authorOrder > 1 and PA2.authorOrder = 1 group by PA2.authorID, PA1.authorID;"
+createFirstAuthorTmp = "create table firstAuthorTmp select PA2.authorID as firstAuthorID, PA1.authorID as topAuthorID from scigene_$$fieldNAME$$_anthology.authors_ARC as A join scigene_$$fieldNAME$$_anthology.paper_author_ARC as PA1 on A.authorID = PA1.authorID join scigene_$$fieldNAME$$_anthology.paper_author_ARC as PA2 on PA1.paperID = PA2.paperID where authorRank <= $$NUMTOPAUTHORS$$ and PA1.authorOrder > 1 and PA2.authorOrder = 1 group by PA2.authorID, PA1.authorID;"
 createFirstAuthorIndex = (
     "create index first_author_index on firstAuthorTmp(firstAuthorID);"
 )
 createTopAuthorIndex = "create index top_author_index on firstAuthorTmp(topAuthorID);"
-selectFirstAuthorPaperCount = "select authorID, authorOrder, year, count(*) as cnt from scigene_acl_anthology.paper_author_ARC as PA, scigene_acl_anthology.papers_ARC as P where authorID in (select distinct firstAuthorID from firstAuthorTmp) and PA.paperID = P.paperID group by authorID, authorOrder, year;"
-selectFirstTopCoAuthorPaperCount = "select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, count(*) as cnt from firstAuthorTmp join scigene_acl_anthology.paper_author_ARC as PA1 on firstAuthorID = PA1.authorID join scigene_acl_anthology.paper_author_ARC as PA2 on topAuthorID = PA2.authorID and PA1.paperID = PA2.paperID and PA1.authorOrder <= $$MINSTUDENTAUTHORORDER$$ and PA1.authorOrder < PA2.authorOrder join scigene_acl_anthology.papers_ARC as P on PA1.paperID = P.paperID group by firstAuthorID, topAuthorID, PA1.authorOrder, year;"
-selectTopAuthorPaperCount = "select A.authorID, year, count(*) as cnt from scigene_acl_anthology.authors_ARC as A join scigene_acl_anthology.paper_author_ARC as PA on authorRank <= $$NUMTOPAUTHORS$$ and A.authorID = PA.authorID  join scigene_acl_anthology.papers_ARC as P on PA.paperID = P.paperID group by A.authorID, year;"
+selectFirstAuthorPaperCount = "select authorID, authorOrder, year, count(*) as cnt from scigene_$$fieldNAME$$_anthology.paper_author_ARC as PA, scigene_$$fieldNAME$$_anthology.papers_ARC as P where authorID in (select distinct firstAuthorID from firstAuthorTmp) and PA.paperID = P.paperID group by authorID, authorOrder, year;"
+selectFirstTopCoAuthorPaperCount = "select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, count(*) as cnt from firstAuthorTmp join scigene_$$fieldNAME$$_anthology.paper_author_ARC as PA1 on firstAuthorID = PA1.authorID join scigene_$$fieldNAME$$_anthology.paper_author_ARC as PA2 on topAuthorID = PA2.authorID and PA1.paperID = PA2.paperID and PA1.authorOrder <= $$MINSTUDENTAUTHORORDER$$ and PA1.authorOrder < PA2.authorOrder join scigene_$$fieldNAME$$_anthology.papers_ARC as P on PA1.paperID = P.paperID group by firstAuthorID, topAuthorID, PA1.authorOrder, year;"
+selectTopAuthorPaperCount = "select A.authorID, year, count(*) as cnt from scigene_$$fieldNAME$$_anthology.authors_ARC as A join scigene_$$fieldNAME$$_anthology.paper_author_ARC as PA on authorRank <= $$NUMTOPAUTHORS$$ and A.authorID = PA.authorID  join scigene_$$fieldNAME$$_anthology.papers_ARC as P on PA.paperID = P.paperID group by A.authorID, year;"
 
 dropTmpTable = "drop table firstAuthorTmp;"
 
 if len(sys.argv) >= 2:
-    numOfTopAuthors = int(sys.argv[1])
+    fieldName = str(sys.argv[1])
 
 if len(sys.argv) >= 3:
-    MIN_SUPERVISOR_RATE = float(sys.argv[2])
+    numOfTopAuthors = int(sys.argv[2])
+
+if len(sys.argv) >= 4:
+    MIN_SUPERVISOR_RATE = float(sys.argv[3])
+
+database = database.replace(field_NAME, fieldName)
+
+selectFirstAuthorPaperCount = selectFirstAuthorPaperCount.replace(field_NAME, fieldName)
 
 selectFirstTopCoAuthorPaperCount = selectFirstTopCoAuthorPaperCount.replace(
     MIN_STUDENT_AUTHOR_ORDER_STRING, str(MIN_STUDENT_AUTHOR_ORDER)
-)
+).replace(field_NAME, fieldName)
 
 createFirstAuthorTmp = createFirstAuthorTmp.replace(
     NUM_TOP_AUTHORS, str(numOfTopAuthors)
-)
+).replace(field_NAME, fieldName)
 selectTopAuthorPaperCount = selectTopAuthorPaperCount.replace(
     NUM_TOP_AUTHORS, str(numOfTopAuthors)
-)
+).replace(field_NAME, fieldName)
 
 conn = ConnectMySQLDB(host, port, database, usr, pwd)
 db_cursor = conn.cursor()
@@ -460,19 +468,21 @@ for row in rows:
 
 print("Pre-compute top author maps!")
 
-# select all top ARC authors
+# select all top field authors
 
-selectTopARCAuthors = "select authorID, name, authorRank from scigene_acl_anthology.authors_ARC where authorRank <= $$NUMTOPAUTHORS$$;"
-selectTopARCAuthors = selectTopARCAuthors.replace(NUM_TOP_AUTHORS, str(numOfTopAuthors))
+selectTopfieldAuthors = "select authorID, name, authorRank from scigene_$$fieldNAME$$_anthology.authors_ARC where authorRank <= $$NUMTOPAUTHORS$$;"
+selectTopfieldAuthors = selectTopfieldAuthors.replace(
+    NUM_TOP_AUTHORS, str(numOfTopAuthors)
+).replace(field_NAME, fieldName)
 
 selectTopAuthorPapers = (
-    "select paperID, year, firstAuthorID from papers_arc_$$ARCAUTHOR$$"
+    "select paperID, year, firstAuthorID from papers_arc_$$fieldAUTHOR$$"
 )
 updateTopAuthorPapers = (
-    "update papers_arc_$$ARCAUTHOR$$ set isKeyPaper = ? where paperID = ?"
+    "update papers_arc_$$fieldAUTHOR$$ set isKeyPaper = ? where paperID = ?"
 )
 
-db_cursor.execute(selectTopARCAuthors)
+db_cursor.execute(selectTopfieldAuthors)
 rows = db_cursor.fetchall()
 
 # process each author
@@ -485,10 +495,10 @@ for row in rows:
     authorTableName = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
 
     selectTopAuthorPapers_author = selectTopAuthorPapers.replace(
-        ARC_AUTHOR, authorTableName
+        field_AUTHOR, authorTableName
     )
     updateTopAuthorPapers_author = updateTopAuthorPapers.replace(
-        ARC_AUTHOR, authorTableName
+        field_AUTHOR, authorTableName
     )
 
     db_cursor.execute(selectTopAuthorPapers_author)
@@ -525,7 +535,7 @@ for row in rows:
         db_cursor.execute(updateTopAuthorPapers_author, isKeyPaper, paperID)
 
     print(
-        "Update key papers for ARC author ",
+        "Update key papers for field author ",
         authorName,
         " with rank ",
         str(rank),

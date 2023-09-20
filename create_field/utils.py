@@ -27,7 +27,7 @@ connection = pymysql.connect(host='localhost',
 cursor = connection.cursor()
 
 def execute(sql):
-    for _sql in sql.split(';'):
+    for _sql in sql.split('\n'):
         _sql = _sql.strip()
         if _sql == '':
             continue

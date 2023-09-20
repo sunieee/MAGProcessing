@@ -200,8 +200,9 @@ class NumpyEncoder(json.JSONEncoder):
 
 if __name__ == "__main__":
     df = pd.read_csv('top_field_authors.csv', sep=',', header=None)
-    df.columns = ['id', 'AuthorId', 'name', '#paper', '#citation'] + list(range(5))
+    df.columns = ['id', 'AuthorId', 'name', '#paper', '#citation', 'hIndex', 'rank'] + list(range(3))
     print(df)
+    author_ranks = df['rank']
     author_names = df['name']
     lev_file = 'lev.json'
 
@@ -221,15 +222,16 @@ if __name__ == "__main__":
         with open('lev.json', 'w') as f:
             json.dump(lev_lis, f, cls=NumpyEncoder)
     
-    match_groups = pd.DataFrame(columns=['ix1', 'ix2', 'name1', 'name2', 'lev_dis', 'similarity'])
-    for group in lev_lis:
-        if group[1] > 0.3:
-            break
+    match_groups = pd.DataFrame(columns=['ix1', 'ix2', 'rank1', 'rank2', 'name1', 'name2', 'lev_dis', 'similarity'])
+    
+    for group in tqdm([g for g in lev_lis if g[1] <= 0.3]):
         ix1, ix2 = group[0]
         similarity = compare_name(author_names[ix1], author_names[ix2])
         match_groups.loc[len(match_groups)] = {
             'ix1': ix1,
             'ix2': ix2,
+            'rank1': author_ranks[ix1],
+            'rank2': author_ranks[ix2],
             'name1': author_names[ix1],
             'name2': author_names[ix2],
             'lev_dis': group[1],

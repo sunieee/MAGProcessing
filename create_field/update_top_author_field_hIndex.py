@@ -43,22 +43,16 @@ FIRST_SECOND_MIN_PAPER_RATIO = 5
 numOfTopAuthors = 1000
 
 field_AUTHOR = "$$fieldAUTHOR$$"
-NUM_TOP_AUTHORS = "$$NUMTOPAUTHORS$$"
 
 #下一条要改一下
-selectTopfieldAuthors = "select authorID, name, PaperCount_field, authorRank from " + database + ".authors_field where authorRank <= $$NUMTOPAUTHORS$$;"
+selectTopfieldAuthors = f"select authorID, name, PaperCount_field, authorRank from {database}.authors_field where authorRank <= {numOfTopAuthors};"
 
 selectDupMAGAuthors = "select authorID, name_short, PaperCount_NLP from authors_MAG where name_short like %s order by papercount_NLP desc limit 2"
 selectfieldAuthorCitations = "select P.CitationCount from papers_field as P join paper_author_field as PA on PA.authorID = %s and P.paperID = PA.paperID;"
 updateTopfieldAuthor = "update authors_field set name_MAG = %s, authorID_MAG = %s, PaperCount_MAG_NLP = %s, CitationCount_MAG_NLP = %s, hIndex_MAG_NLP = %s where authorID = %s"
 updateTopfieldAuthorHIndex = "update authors_field set hIndex_field = %s where authorID = %s"
-
-# selectfieldAuthorCitationCount = "select sum(P.citationCount) from papers_field as P join paper_author_field as PA on PA.authorID = %s and P.paperID = PA.paperID and P.citationCount >=0;"
-selectfieldAuthorMAGCitationCount = "select sum(P.CitationCount) from papers_MAG as P join paper_author_MAG as PA on PA.authorID = %s and P.paperID = PA.paperID;"
 selectfieldAuthorMAGCitations = "select P.CitationCount from papers_MAG as P join paper_author_MAG as PA on PA.authorID = %s and P.paperID = PA.paperID;"
 
-
-selectTopfieldAuthors = selectTopfieldAuthors.replace(NUM_TOP_AUTHORS, str(numOfTopAuthors))
 
 # select all top field authors
 cursor.execute(selectTopfieldAuthors)
