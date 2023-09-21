@@ -57,12 +57,13 @@ for i in range(MAX_PAPER):
 
 
 def compute_count_list(academic_year_list, paper_count_map, start_list=None):
-    count_list = {0: 0}
+    count_list = [0]
     for i in range(1, len(academic_year_list)):
+        assert len(count_list) == i
         count = paper_count_map.get(academic_year_list[i - 1], 0)
         if start_list:
             count *= min(SUPERVISED_YEAR_MODIFIER[i - 1], SUPERVISED_PAPER_MODIFIER[int(start_list[i - 1])])
-        count_list[i] = count_list[i - 1] + count
+        count_list.append(count_list[-1] + count)
     return count_list
 
 
@@ -82,40 +83,38 @@ def compute_supervisor_rate(studentID, supervisorID, year, paperID):
         return 1 / float(cursorField.fetchone()[0])
 
     # the sorted list of years that the student has paper publication, truncated to {0,1,..., MAX_ACADEMIC_YEAR}
-    student_academic_years = sorted(firstAuthorPaperCountMap[studentID].keys())[: MAX_ACADEMIC_YEAR + 1]
+    student_academic_years = sorted(list(firstAuthorPaperCountMap[studentID].keys()))[: MAX_ACADEMIC_YEAR + 1]
     if not (year in student_academic_years):
         return 0.0
     
-    currentAcademicYearIndex = student_academic_years.index(year)
+    yearIndex = student_academic_years.index(year)
     coAuthorID = f"{studentID}-{supervisorID}"
     faWeightedPaperCountMap = firstAuthorWeightedPaperCountMap[studentID]
     caWeightedPaperCountMap = coAuthorWeightedPaperCountMap[coAuthorID]
     
-    start_student_count, _ = compute_count_list(student_academic_years, faWeightedPaperCountMap)
-    end_student_count, _ = compute_count_list(student_academic_years[::-1], faWeightedPaperCountMap)[::-1]
+    start_student_count = compute_count_list(student_academic_years, faWeightedPaperCountMap)
+    end_student_count = compute_count_list(student_academic_years[::-1], faWeightedPaperCountMap)[::-1]
 
     # the same as below except that co-author weighted count is replaced by student weighted count
-    total_student_count = start_student_count[currentAcademicYearIndex] + end_student_count[currentAcademicYearIndex] \
-        + faWeightedPaperCountMap[student_academic_years[currentAcademicYearIndex]];
+    total_student_count = start_student_count[yearIndex] + end_student_count[yearIndex] \
+        + faWeightedPaperCountMap[year];
 
     start_coauthor_count = compute_count_list(student_academic_years, caWeightedPaperCountMap, start_student_count)
     end_coauthor_count = compute_count_list(student_academic_years[::-1], caWeightedPaperCountMap, start_student_count)[::-1]
 
     total_coauthor_count = (
-        start_coauthor_count[currentAcademicYearIndex] + end_coauthor_count[currentAcademicYearIndex]
-        + caWeightedPaperCountMap[
-            student_academic_years[currentAcademicYearIndex]
-        ]
-        * min(SUPERVISED_YEAR_MODIFIER[currentAcademicYearIndex],
-            SUPERVISED_PAPER_MODIFIER[int(start_student_count[currentAcademicYearIndex])],
+        start_coauthor_count[yearIndex] + end_coauthor_count[yearIndex]
+        + caWeightedPaperCountMap[year]
+        * min(SUPERVISED_YEAR_MODIFIER[yearIndex],
+            SUPERVISED_PAPER_MODIFIER[int(start_student_count[yearIndex])],
         )
     )
 
     # iterate all possible year span (window) to compute the max supervisedRate
     maxSupervisedRate = 0.0
 
-    for start_year_index in range(0, currentAcademicYearIndex + 1):
-        for end_year_index in range(currentAcademicYearIndex, len(student_academic_years)):
+    for start_year_index in range(0, yearIndex + 1):
+        for end_year_index in range(yearIndex, len(student_academic_years)):
             # there is a problem here: the co-authorship can happen in the same year,
             # because the surrounding years may not have co-authorship between student and supervisor
             # then the small window with year_span >= 2 can still be the maximal because the co-authorship
@@ -155,7 +154,7 @@ def compute_supervisor_rate(studentID, supervisorID, year, paperID):
         supervisingRate = numerator / denominator
 
     supervisingRate = min(1.0, supervisingRate / MIN_SUPERVISING_RATE)
-
+    # print(paperID, student_academic_years, maxSupervisedRate * supervisingRate)
     return maxSupervisedRate * supervisingRate
 
 
@@ -174,7 +173,7 @@ create table firstAuthorTmp
     from scigene_{fieldName}_field.authors_field as A 
     join scigene_{fieldName}_field.paper_author_field as PA1 on A.authorID = PA1.authorID 
     join scigene_{fieldName}_field.paper_author_field as PA2 on PA1.paperID = PA2.paperID 
-    where {filterCondition} 
+    where A.{filterCondition} 
         and PA1.authorOrder > 1 and PA2.authorOrder = 1 
     group by PA2.authorID, PA1.authorID;
             
@@ -258,7 +257,7 @@ rows = executeFetch(f"""
 select A.authorID, year, count(*) as cnt 
     from scigene_{fieldName}_field.authors_field as A 
     join scigene_{fieldName}_field.paper_author_field as PA 
-        on {filterCondition}
+        on A.{filterCondition}
         and A.authorID = PA.authorID  
     join scigene_{fieldName}_field.papers_field as P on PA.paperID = P.paperID 
     group by A.authorID, year;""")
@@ -300,26 +299,31 @@ for topAuthorID, authorName, rank in rows:
     authorTableName = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
     paper_rows = executeFetch(f"select paperID, year, firstAuthorID from papers_{authorTableName}")
 
-    print(authorName)
+    print('='*20, authorName, '='*20)
     # process each paper of the author
     for paper_row in paper_rows:
-
         paperID = str(paper_row[0].strip())
         paperYear = int(paper_row[1])
+        if not paper_row[2]:
+            print('Target paper do not have first author, skip!', paperID)
+            continue
         firstAuthorID = str(paper_row[2].strip())
 
         if firstAuthorID == topAuthorID:
             isKeyPaper = 1
         else:
-            try:
-                isKeyPaper = compute_supervisor_rate(firstAuthorID, topAuthorID, paperYear, paperID)
-            except:
-                print(firstAuthorID)
-                print(topAuthorID)
-                # print(firstAuthorPaperCountMap)
-                exit(0)
+            # try:
+            isKeyPaper = compute_supervisor_rate(firstAuthorID, topAuthorID, paperYear, paperID)
+            # except Exception as e:
+            #     print('The row is not valid:')
+            #     print('firstAuthorID:', firstAuthorID)
+            #     print('topAuthorID:', topAuthorID)
+            #     print('paperYear:', paperYear)
+            #     print('paperID:', paperID)
+            #     print(e)
+            #     exit(0)
 
-        cursor.execute(f"update papers_{authorTableName} set isKeyPaper = ? where paperID = ?", isKeyPaper, paperID)
+        cursor.execute(f"update papers_{authorTableName} set isKeyPaper = %s where paperID = %s", (isKeyPaper, paperID))
 
     print(f"Update key papers for field author {authorName} with rank {rank}: authorTableName",)
     conn.commit()

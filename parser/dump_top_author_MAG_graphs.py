@@ -1,18 +1,16 @@
 from utils import *
+import pandas as pd
 
 # dump all top field authors
-cursor.execute(f"""
-select * from scigene_{fieldName}_field.authors_field
-    where authorRank <= {numOfTopAuthors} or {filterCondition}
-    INTO OUTFILE 'data/csv/{fieldName}/top_field_authors.csv' 
-    FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\\n';""")
+df = pd.read_sql(f"""select * from scigene_{fieldName}_field.authors_field
+    where authorRank <= {numOfTopAuthors} or {filterCondition}""", conn)
+df.to_csv(f'data/csv/{fieldName}/top_field_authors.csv', index=False)
 
 # select exact top field authors
-cursor.execute(f"""
+rows = executeFetch(f"""
 select authorID, name, authorRank, PaperCount_field 
     from scigene_{fieldName}_field.authors_field
     where {filterCondition};""")
-rows = cursor.fetchall()
 
 # process each author
 for row in rows:
@@ -22,15 +20,11 @@ for row in rows:
 
     authorTableName = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
 
-    execute(f"""
-select * from papers_arc_{authorTableName} 
-    INTO OUTFILE 'data/csv/{fieldName}/papers_arc_{authorTableName}.csv' 
-    FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\\n';
+    papers_df = pd.read_sql(f"SELECT * FROM papers_{authorTableName}", conn)
+    links_df = pd.read_sql(f"SELECT * FROM links_{authorTableName}", conn)
 
-select * from influence_arc_{authorTableName} 
-    INTO OUTFILE 'data/csv/{fieldName}/influence_arc_{authorTableName}.csv' 
-    FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\\n';
-""")
+    papers_df.to_csv(f'data/csv/{fieldName}/papers_{authorTableName}.csv', index=False)
+    links_df.to_csv(f'data/csv/{fieldName}/links_{authorTableName}.csv', index=False)
 
     print(f"Dump papers and links for field author {authorName} with rank {rank}: {authorTableName}")
 

@@ -1,10 +1,10 @@
 
 
 export fieldName=visualization
-export numOfTopAuthors=1100
+export numOfTopAuthors=1050
 
-mysql -h192.168.0.140 -uroot -proot -e"drop database scigene_${fieldName}_field_pcg;"
-mysql -h192.168.0.140 -uroot -proot -e"create database scigene_${fieldName}_field_pcg;"
+# mysql -h192.168.0.140 -uroot -proot -e"drop database scigene_${fieldName}_field_pcg;"
+# mysql -h192.168.0.140 -uroot -proot -e"create database scigene_${fieldName}_field_pcg;"
 rm -f data/csv/${fieldName}/*.csv
 mkdir data/csv/${fieldName}
 chmod 777 data/csv/${fieldName}

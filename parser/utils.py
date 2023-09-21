@@ -8,8 +8,17 @@ fieldName = os.environ.get('fieldName', 'visualization')
 numOfTopAuthors = os.environ.get('numOfTopAuthors', 1100)
 numOfTopAuthors = int(numOfTopAuthors)
 
-filterCondition = f"authorRank <= {numOfTopAuthors}"
-filterCondition = "authorID = '2147343253'"
+# filterCondition = f"authorRank <= {numOfTopAuthors}"
+
+# 对于 authorID 的限制
+with open('data/test.txt', 'r') as f:
+    authorID_list = f.read().split()
+# authorID_list = ['2147343253', '2076420186', '2122885999', 
+#                  '2003408012', '2762167099', '2158935544']
+
+ids_string = ', '.join(map(str, authorID_list))
+filterCondition = f"authorID IN ({ids_string})"
+print(filterCondition)
 
 # authorRank > 1000 and authorRank <= {numOfTopAuthors};
 
