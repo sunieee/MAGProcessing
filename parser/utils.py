@@ -15,6 +15,7 @@ with open('data/test.txt', 'r') as f:
     authorID_list = f.read().split()
 # authorID_list = ['2147343253', '2076420186', '2122885999', 
 #                  '2003408012', '2762167099', '2158935544']
+# authorID_list = ['3206897746']
 
 ids_string = ', '.join(map(str, authorID_list))
 filterCondition = f"authorID IN ({ids_string})"
