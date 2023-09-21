@@ -3,13 +3,11 @@ import pymysql
 import time
 
 import sys
+import os
 
-if len(sys.argv) < 3:
-    print("Not enough parameters: ", len(sys.argv))
-    sys.exit
 
-field_ = sys.argv[1]
-database = sys.argv[2]
+field_ = os.environ.get('fieldID', '77088390')
+database = os.environ.get('database', 'scigene_database_field')
 
 # database_mapping = {
 #     '77088390': 'scigene_database_field',

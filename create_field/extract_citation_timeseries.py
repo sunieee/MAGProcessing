@@ -166,5 +166,3 @@ alter table papers_field add index(year);
 ALTER TABLE papers_field ADD citationCountByYear varchar(999);
 update papers_field as PA, papers_field_citation_timeseries as PM set PA.citationCountByYear = PM.citationCountByYear where PA.paperID = PM.paperID;
 ''')
-
-connection.close()

@@ -48,14 +48,16 @@ result=model.predict_proba(db2)[:,1]
 
 通过**最短编辑距离除以总长**得到lev_dis并过滤(<0.3)，按照煜文的**标题比对算法**计算了similarity，按照similarity降序排序得到这些比较相似的名字，见表格`merge_author/match_groups.csv`共6组，M.E. Groller应该也是，但没必要合并了(应该论文很少)，预估相同作者的阈值是：simlarity > 0.96 且 lev_dis < 0.1
 
-|      | rank1  | rank2  | name1               | name2               | lev_dis     | similarity  |
-| ---- | ---- | ---- | ------------------- | ------------------- | ----------- | ----------- |
-| 0    | 6    | 138  | Daniel A. Keim      | Daniel A. Keim      | 0           | 1           |
-| 1    | 31   | 401  | Sheelagh Carpendale | Sheelagh Carpendale | 0           | 1           |
-| 2    | 149  | 944  | Takashi Yamane      | Takashi Yamane      | 0           | 1           |
-| 3    | 610  | 761  | Shinzaburo Umeda    | Shinzaburo Umeda    | 0           | 1           |
-| 8    | 148  | 234  | Eduard GrÃ¶ller     | M. Eduard GrÃ¶ller  | 0.090909091 | 1           |
-| 58   | 78   | 143  | Jarke J. van Wijk   | J.J. van Wijk       | 0.166666667 | 0.909090909 |
+结果见`match.csv`
+
+|| rank1 | rank2 | name1 | name2               | lev_dis             | similarity  |
+| ----- | ----- | ----- | ------------------- | ------------------- | ----------- | ----------- |
+| 0     | 6     | 138   | Daniel A. Keim      | Daniel A. Keim      | 0           | 1           |
+| 1     | 31    | 401   | Sheelagh Carpendale | Sheelagh Carpendale | 0           | 1           |
+| 2     | 149   | 944   | Takashi Yamane      | Takashi Yamane      | 0           | 1           |
+| 3     | 610   | 761   | Shinzaburo Umeda    | Shinzaburo Umeda    | 0           | 1           |
+| 8     | 148   | 234   | Eduard GrÃ¶ller     | M. Eduard GrÃ¶ller  | 0.090909091 | 1           |
+| 58    | 78    | 143   | Jarke J. van Wijk   | J.J. van Wijk       | 0.166666667 | 0.909090909 |
 
 ![47d5e9e30a8bfc31b5929caeb72349a](https://github.com/sunieee/ARC/assets/42105752/218f75fd-2220-4e52-b7a3-3e184666e750)
 
@@ -63,8 +65,16 @@ result=model.predict_proba(db2)[:,1]
 如果不修改任何有关数据库，直接后处理合并生成的多张表格是不行的。因为在计算点概率的过程中用到了author表与coauthor的联合查询，合并之后影响点概率的计算，因此必须在第二步之前就必须将两人合为一人！
 
 将少的合并到大的之中，步骤为：
-- 修改领域数据库：在paper_author_field中修改author_id，重新刷新一下统计信息：#paper, #citation, hIndex
+- 修改领域数据库：（运行`merge_author/merge.py`）
+    - paper_author_field: 修改author_id
+    - authors_field: 重新刷新一下统计信息：#paper, #citation, hIndex
 - 重新生成点概率：
+
+```
+# 删除authorID对应的papers和links
+
+# （可选）删除authorID2对应的pcg表
+```
 
 
 ## 增量更新

@@ -181,20 +181,17 @@ create table firstAuthorTmp
 create index first_author_index on firstAuthorTmp(firstAuthorID);
             
 create index top_author_index on firstAuthorTmp(topAuthorID);""")
-except:
-    print("FirstAuthorTmp exists")
+except Exception as e:
+    print("FirstAuthorTmp exists", e)
 
 print("Create temp table for the list of first authors!")
 
-cursor.execute(f"""
+rows = executeFetch(f"""
 select authorID, authorOrder, year, count(*) as cnt 
     from scigene_{fieldName}_field.paper_author_field as PA, 
         scigene_{fieldName}_field.papers_field as P 
     where authorID in (select distinct firstAuthorID from firstAuthorTmp) and PA.paperID = P.paperID 
     group by authorID, authorOrder, year;""")
-rows = cursor.fetchall()
-
-# 初始化映射
 firstAuthorPaperCountMap = {}
 firstAuthorWeightedPaperCountMap = {}
 
@@ -222,7 +219,7 @@ for authorID, authorOrder, year, count in rows:
 ######################################################################
 print("Pre-compute first-author maps!")
 
-cursor.execute(f"""
+rows = executeFetch(f"""
 select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, count(*) as cnt 
     from firstAuthorTmp 
     join scigene_{fieldName}_field.paper_author_field as PA1 on firstAuthorID = PA1.authorID 
@@ -232,8 +229,6 @@ select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, co
     join scigene_{fieldName}_field.papers_field as P on PA1.paperID = P.paperID 
     group by firstAuthorID, topAuthorID, PA1.authorOrder, year;
 """)
-rows = cursor.fetchall()
-
 coAuthorWeightedPaperCountMap = {}
 coAuthorPaperCountMap = {}
 
@@ -259,7 +254,7 @@ for firstAuthorID, topAuthorID, authorOrder, year, count in rows:
 ######################################################################
 print("Pre-compute co-author maps!")
 
-cursor.execute(f"""
+rows = executeFetch(f"""
 select A.authorID, year, count(*) as cnt 
     from scigene_{fieldName}_field.authors_field as A 
     join scigene_{fieldName}_field.paper_author_field as PA 
@@ -267,7 +262,6 @@ select A.authorID, year, count(*) as cnt
         and A.authorID = PA.authorID  
     join scigene_{fieldName}_field.papers_field as P on PA.paperID = P.paperID 
     group by A.authorID, year;""")
-rows = cursor.fetchall()
 
 topAuthorPaperCountMap = {}
 
@@ -292,12 +286,10 @@ for authorID, year, count in rows:
 # 提交数据库更改。
 ######################################################################
 print("Pre-compute top author maps!")
-
-cursor.execute(f"""
+rows = executeFetch(f"""
 select authorID, name, authorRank 
     from scigene_{fieldName}_field.authors_field 
     where {filterCondition};""")
-rows = cursor.fetchall()
 
 # process each author
 for topAuthorID, authorName, rank in rows:
@@ -306,8 +298,7 @@ for topAuthorID, authorName, rank in rows:
     rank = int(rank)
 
     authorTableName = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
-    cursor.execute(f"select paperID, year, firstAuthorID from papers_{authorTableName}")
-    paper_rows = cursor.fetchall()
+    paper_rows = executeFetch(f"select paperID, year, firstAuthorID from papers_{authorTableName}")
 
     print(authorName)
     # process each paper of the author

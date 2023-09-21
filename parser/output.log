@@ -1,0 +1,35 @@
+(base) sy@vis:~/arc/parser$ python build_top_author_MAG_graphs.py 
+[ create mapping time cost:  3.049663782119751 ]
+executing:  create table papers_danielakeim6 (firstAuthorID varchar(15), firstAuthorName varchar(999), isKeyPaper float) 
+    select papers_field.paperID, title, year, referenceCount, citationCount, min(authorOrder) as authorOrder, 
+    0 as isKeyPaper, '' as firstAuthorID, '' as firstAuthorName from scigene_visualization_field.paper_author_field, 
+    scigene_visualization_field.papers_field where authorID = '2147343253' and papers_field.paperID = paper_author_field.paperID 
+    group by papers_field.paperID, title, year
+[time cost:  0.0700538158416748 ]
+executing:  create index arc_index on papers_danielakeim6(paperID)
+[time cost:  0.07372927665710449 ]
+[ read_sql time cost:  0.01309514045715332 ]
+[ map time cost1:  0.1577143669128418 ]
+[ map time cost:  0.43248414993286133 ]
+[ to_sql time cost:  0.11045217514038086 ]
+Create and fill papers for field author Daniel A. Keim  with rank 6: danielakeim6
+executing:  create table links_danielakeim6 (extends_prob float) 
+    select P.citingpaperID, P.citedpaperID, 0 as sharedAuthor, null as extends_prob 
+    from scigene_visualization_field.paper_reference_field as P 
+    where P.citingpaperID in (select paperID from papers_danielakeim6) 
+    group by P.citingpaperID, P.citedpaperID
+[time cost:  0.25528430938720703 ]
+executing:  create index citing_index on links_danielakeim6(citingpaperID)
+[time cost:  0.22831511497497559 ]
+executing:  create index cited_index on links_danielakeim6(citedpaperID)
+[time cost:  0.15231800079345703 ]
+executing:  update links_danielakeim6 as P, scigene_visualization_field.paper_author_field as A, 
+    scigene_visualization_field.paper_author_field as B set P.sharedAuthor = 1 
+    where A.paperID = P.citingpaperID and B.paperID = P.citedpaperID and A.authorID = B.authorID
+[time cost:  2.358463764190674 ]
+executing:  update links_danielakeim6, scigene_visualization_field.paper_reference_field_labeled 
+    set links_danielakeim6.extends_prob = paper_reference_field_labeled.extends_prob 
+    where links_danielakeim6.citingpaperID = paper_reference_field_labeled.citingpaperID 
+    and links_danielakeim6.citedpaperID = paper_reference_field_labeled.citedpaperID
+[time cost:  0.3010592460632324 ]
+Create and fill links for field author Daniel A. Keim with rank 6: danielakeim6

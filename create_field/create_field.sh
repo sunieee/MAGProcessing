@@ -1,5 +1,6 @@
+export fieldID=77088390
+export database=scigene_database_field
 
-python extract_scigene_field.py $1 $2
-python extract_citation_timeseries.py $1 $2
-python update_top_author_field_hIndex.py $1 $2
+python extract_scigene_field.py
+python extract_citation_timeseries.py
 # python set_fellow.py $2
