@@ -1,7 +1,7 @@
 
 
 export fieldName=visualization
-export numOfTopAuthors=1050
+export numOfTopAuthors=1000
 
 # mysql -h192.168.0.140 -uroot -proot -e"drop database scigene_${fieldName}_field_pcg;"
 # mysql -h192.168.0.140 -uroot -proot -e"create database scigene_${fieldName}_field_pcg;"

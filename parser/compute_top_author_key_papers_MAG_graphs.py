@@ -305,8 +305,14 @@ for topAuthorID, authorName, rank in rows:
         paperID = str(paper_row[0].strip())
         paperYear = int(paper_row[1])
         if not paper_row[2]:
+            # firstAuthorID = executeFetch(f"select authorID from MACG.paper_author where paperID='{paperID}' and authorOrder=1")
+            # firstAuthorID = firstAuthorID[0][0]
+            # print(firstAuthorID)    # [('3137927773',)] -> '3137927773'
+            # execute(f"update papers_{authorTableName} set firstAuthorID='{firstAuthorID}' where paperID='{paperID}';")
+            # print('update firstAuthorID:', firstAuthorID, 'for paperID:', paperID)
             print('Target paper do not have first author, skip!', paperID)
             continue
+
         firstAuthorID = str(paper_row[2].strip())
 
         if firstAuthorID == topAuthorID:
