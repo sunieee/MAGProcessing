@@ -1,7 +1,7 @@
 import pandas as pd
 from sqlalchemy import create_engine
 import sqlalchemy
-import sys
+from utils import *
 
 df_csv=pd.read_csv("all_features.csv")
 
@@ -14,15 +14,14 @@ df_csv=pd.read_csv("all_features.csv")
 # print(df_csv)
 # df_csv.to_csv('all_features.csv',index=False)
 
-if len(sys.argv) < 2:
-    print("Not enough parameters: ", len(sys.argv))
-    sys.exit
 
-database = sys.argv[1]
-
-engine = create_engine('mysql+pymysql://root:Vis_2014@localhost:3306/'+database)
-
-
-df_csv.to_sql('all_dataset_link_with_features', engine, if_exists='replace', index=False, dtype={"citingpaperID": sqlalchemy.types.NVARCHAR(length=100),\
-    "citedpaperID": sqlalchemy.types.NVARCHAR(length=100),"year_difference":sqlalchemy.types.INTEGER(), "citingpaperCitationCount":sqlalchemy.types.INTEGER(),\
-        "citedpaperCitationCount":sqlalchemy.types.INTEGER(),"self_cite":sqlalchemy.types.INTEGER(),"raw_cocitation": sqlalchemy.types.INTEGER(),"raw_bibcoupling": sqlalchemy.types.INTEGER()})
+df_csv.to_sql('all_dataset_link_with_features', engine, if_exists='replace', index=False, dtype={
+        "citingpaperID": sqlalchemy.types.NVARCHAR(length=100),
+        "citedpaperID": sqlalchemy.types.NVARCHAR(length=100),
+        "year_difference":sqlalchemy.types.INTEGER(), 
+        "citingpaperCitationCount":sqlalchemy.types.INTEGER(),
+        "citedpaperCitationCount":sqlalchemy.types.INTEGER(),
+        "self_cite":sqlalchemy.types.INTEGER(),
+        "raw_cocitation": sqlalchemy.types.INTEGER(),
+        "raw_bibcoupling": sqlalchemy.types.INTEGER()
+    })

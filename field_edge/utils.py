@@ -2,6 +2,7 @@ import os
 import pymysql
 import time
 from sqlalchemy import create_engine
+import sqlalchemy
 
 fieldName = os.environ.get('fieldName', 'visualization')
 
@@ -16,8 +17,8 @@ print(filterCondition)
 
 
 
-citation_link_table_name = 'paper_reference_field'
-citation_timeseries_table_name = 'papers_field_citation_timeseries'
+citation_link_table = 'paper_reference_field'
+citation_timeseries_table = 'papers_field_citation_timeseries'
 
 
 database = f"scigene_{fieldName}_field"

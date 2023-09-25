@@ -1,15 +1,5 @@
 import pandas as pd
-import numpy as np
-from sqlalchemy import create_engine
-
-import sys
-if len(sys.argv) < 2:
-    print("Not enough parameters: ", len(sys.argv))
-    sys.exit
-
-database = sys.argv[1]
-
-engine = create_engine('mysql+pymysql://root:Vis_2014@localhost:3306/'+database)
+from utils import *
 
 
 sql_paper = '''select * from all_dataset_link_with_features; '''
