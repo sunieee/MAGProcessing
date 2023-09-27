@@ -4,7 +4,7 @@ import pandas as pd
 # dump all top field authors
 df = pd.read_sql(f"""select * from scigene_{fieldName}_field.authors_field
     where authorRank <= {numOfTopAuthors} or {filterCondition}""", conn)
-df.to_csv(f'data/csv/{fieldName}/top_field_authors.csv', index=False)
+df.to_csv(f'data/{fieldName}/top_field_authors.csv', index=False)
 
 # select exact top field authors
 rows = executeFetch(f"""
@@ -23,8 +23,8 @@ for row in rows:
     papers_df = pd.read_sql(f"SELECT * FROM papers_{authorTableName}", conn)
     links_df = pd.read_sql(f"SELECT * FROM links_{authorTableName}", conn)
 
-    papers_df.to_csv(f'data/csv/{fieldName}/papers_{authorTableName}.csv', index=False)
-    links_df.to_csv(f'data/csv/{fieldName}/links_{authorTableName}.csv', index=False)
+    papers_df.to_csv(f'data/{fieldName}/papers_{authorID}.csv', index=False)
+    links_df.to_csv(f'data/{fieldName}/links_{authorID}.csv', index=False)
 
     print(f"Dump papers and links for field author {authorName} with rank {rank}: {authorTableName}")
 

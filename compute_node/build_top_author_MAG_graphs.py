@@ -79,7 +79,7 @@ create index arc_index on papers_{authorTableName}(paperID);
     conn.commit()
     print('[ to_sql time cost: ', time.time()-t, ']')
     
-    df.to_csv(f'data/csv/{fieldName}/papers_{authorTableName}.csv', index=False)
+    df.to_csv(f'data/{fieldName}/papers_{authorID}.csv', index=False)
     print(f"Create and fill papers for field author {authorName}  with rank {rank}: {authorTableName}")
     
     dropfieldLinks_author = f"drop table links_{authorTableName}"
@@ -116,7 +116,7 @@ update links_{authorTableName}, scigene_{fieldName}_field.paper_reference_field_
 """)
     
     df = pd.read_sql(f"SELECT * FROM links_{authorTableName}", conn)
-    df.to_csv(f'data/csv/{fieldName}/links_{authorTableName}.csv', index=False)
+    df.to_csv(f'data/{fieldName}/links_{authorID}.csv', index=False)
     print(f"Create and fill links for field author {authorName} with rank {rank}: {authorTableName}")
 
 cursor.close()
