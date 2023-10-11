@@ -7,6 +7,16 @@ from tqdm import tqdm
 # 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息，添加 h-index 信息，创建名为 paper_reference_field_labeled 的表，添加名为 FellowType 列
 #######################################################################
 print('updating authors_field')
+
+try_execute("drop table paper_reference_field_labeled;")
+try_execute("drop table authors_field_tmp;")
+try_execute("ALTER TABLE authors_field DROP COLUMN PaperCount_field;")
+try_execute("ALTER TABLE authors_field DROP COLUMN authorRank;")
+try_execute("ALTER TABLE authors_field DROP COLUMN CitationCount_field;")
+try_execute("ALTER TABLE authors_field DROP COLUMN hIndex_field;")
+try_execute("ALTER TABLE authors_field DROP COLUMN FellowType;")
+
+
 execute('''
 create table authors_field_tmp select tmp.*, @curRank := @curRank + 1 AS authorRank 
     from (select authorID, count(*) as PaperCount_field 
@@ -42,10 +52,11 @@ citingpaperID varchar(15),
 citedpaperID varchar(15),
 extends_prob double
 );
-ALTER TABLE authors_field ADD FellowType varchar(999);
-update authors_field as af, scigene_acl_anthology.fellow as f 
-    set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
 ''')
+
+# ALTER TABLE authors_field ADD FellowType varchar(999);
+# update authors_field as af, scigene_acl_anthology.fellow as f 
+#     set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
 
 
 
@@ -55,9 +66,11 @@ update authors_field as af, scigene_acl_anthology.fellow as f
 # 以反映其影响力和论文引用分布情况。
 #######################################################################
 numOfTopAuthors = 1100
+# filterCondition = f'authorRank <= {numOfTopAuthors}';
+filterCondition = f'PaperCount_field > 10';
 
 # select all top field authors
-cursor.execute(f"select authorID, name, PaperCount_field, authorRank from {database}.authors_field where authorRank <= {numOfTopAuthors};")
+cursor.execute(f"select authorID, name, PaperCount_field, authorRank from {database}.authors_field where {filterCondition};")
 rows = cursor.fetchall()
 
 # process each author
@@ -74,8 +87,8 @@ for row in tqdm(rows):
         "update authors_field set hIndex_field = %s where authorID = %s",
         (hIndex_field, authorID)
     )
-    connection.commit()
+    conn.commit()
     # print("Process author: ", authorName, " with rank ", str(authorRank))
 
 cursor.close()
-connection.close()
+conn.close()

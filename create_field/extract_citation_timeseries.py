@@ -16,8 +16,8 @@ SELECT M.paperID, R.citingpaperID, 0 as year
 FROM papers_field AS M
 JOIN paper_reference_field AS R ON M.paperID = R.citedpaperID
 '''
-papers_field_citation_timeseries_raw_raw = pd.read_sql_query(sql, connection)
-macg_papers = pd.read_csv(f'out/papers_{field_}.csv', usecols=['paperID', 'PublicationDate'], dtype={'paperID': str, 'PublicationDate': str})
+papers_field_citation_timeseries_raw_raw = pd.read_sql_query(sql, conn)
+macg_papers = pd.read_csv(f'out/{database}/papers.csv', usecols=['paperID', 'PublicationDate'], dtype={'paperID': str, 'PublicationDate': str})
 macg_papers['PublicationDate'] = pd.to_datetime(macg_papers['PublicationDate'])
 
 
@@ -41,18 +41,12 @@ papers_field_citation_timeseries_raw = papers_field_citation_timeseries_raw_raw.
 print('deleting rows with year <= 0')
 papers_field_citation_timeseries_raw = papers_field_citation_timeseries_raw[papers_field_citation_timeseries_raw['year'] > 0]
 
-# drop db
-try:
-    cursor.execute("drop table papers_field_citation_timeseries;")
-except:
-    pass
-connection.commit()
 
 ####################################################################################
 # create timeseries
 # 从raw中提取、处理并创建名为 papers_field_citation_timeseries 的数据表，记录了每篇论文在不同年份的引用次数信息，同时保证年份的连续性和数据的完整性。
 ####################################################################################
-# create db
+try_execute("drop table papers_field_citation_timeseries;")
 cursor.execute("""CREATE TABLE papers_field_citation_timeseries(
 paperID varchar(15),
 publicationYear int,
@@ -62,7 +56,7 @@ totalCitationCount int,
 citationCountByYear varchar(999),
 PRIMARY KEY (paperID)
 );""")
-connection.commit()
+conn.commit()
 
 # select all raw paper years
 print('selecting all raw paper years')
@@ -146,7 +140,7 @@ for paperID in tqdm(citationCountMap):
         values
     )
 
-connection.commit()
+conn.commit()
 
 
 ####################################################################################
@@ -157,7 +151,7 @@ print('updating papers_field')
 cursor.execute("SHOW COLUMNS FROM papers_field LIKE 'year'")
 if cursor.fetchone() is None:
     cursor.execute("ALTER TABLE papers_field ADD year INT")
-    connection.commit()
+    conn.commit()
 
 execute('''
 update papers_field set year = year(PublicationDate);

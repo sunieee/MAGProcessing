@@ -278,9 +278,7 @@ update authors_field as af, scigene_acl_anthology.fellow as f set af.FellowType=
 
 # 构建样例
 
-创建scigene_database_field、scigene_physics_field两个数据库，分别对于的fieldID为：77088390、121332964
-
-## scigene_database_field
+创建scigene_database_field、scigene_physics_field两个数据库，分别对于的fieldID为：77088390、121332964，定义在`config.yaml`
 
 以database为例：
 
@@ -290,40 +288,14 @@ select * from field_of_study where name='Database';
 ```
 
 ```sh
-# select * from papers_field where fieldID = 77088390;
-python scigene_field.py 77088390 scigene_database_field
+export database=scigene_database_field
+python scigene_field.py
+python extract_citation_timeseries.py
+python update_top_author_field_hIndex.py 
 ```
-
-> 575106
-100%|███████████████████████████████████████████████████████████████████████| 5752/5752 [10:29<00:00,  9.14it/s]
-papers(paperID) original (575106, 8)
-papers(paperID) drop_duplicates (575106, 8)
-papers(paperID) time cost: 630.5266470909119
-100%|████████████████████████████████████████████████████████████████████████| 5752/5752 [04:46<00:00, 20.05it/s]
-paper_author(paperID) original (1572976, 3)
-paper_author(paperID) drop_duplicates (1564429, 3)
-paper_author(paperID) time cost: 288.00314688682556
-100%|████████████████████████████████████████████████████████████████████████| 5752/5752 [22:28<00:00,  4.27it/s]
-paper_reference(citingpaperID) original (5106008, 2)
-paper_reference(citingpaperID) drop_duplicates (5106008, 2)
-paper_reference(citingpaperID) time cost: 1352.2168371677399
-100%|███████████████████████████████████████████████████████████████████████| 5752/5752 [34:29<00:00,  2.78it/s]
-paper_reference(citedpaperID) original (6063437, 2)
-paper_reference(citedpaperID) drop_duplicates (6063437, 2)
-paper_reference(citedpaperID) time cost: 2073.8136801719666
-paper_reference original (11169445, 2)
-paper_reference drop_duplicates (10245453, 2)
-100%|█████████████████████████████████████████████████████████████████████| 11334/11334 [24:15<00:00,  7.79it/s]
-authors(authorID) original (1133315, 5)
-authors(authorID) drop_duplicates (1133315, 5)
-authors(authorID) time cost: 1456.4913499355316
 
 ```sh
-python extract_citation_timeseries.py 77088390 scigene_database_field
-```
-
-
-> create table MACG_papers_tmp select P.* from MACG.papers as P join MACG_papers_tmpid as D on P.paperID = D.paperID
+create table MACG_papers_tmp select P.* from MACG.papers as P join MACG_papers_tmpid as D on P.paperID = D.paperID
 Traceback (most recent call last):
   File "extract_citation_time_series_MAG.py", line 44, in <module>  
   File "extract_citation_time_series_MAG.py", line 40, in execute
@@ -345,172 +317,6 @@ Traceback (most recent call last):
   File "/home/sy/anaconda3/lib/python3.8/site-packages/pymysql/err.py", line 143, in raise_mysql_exception
     raise errorclass(errno, errval)
 pymysql.err.OperationalError: (1206, 'The total number of locks exceeds the lock table size')
-
-
-可能是由于 MACG_papers 和 MACG_papers_tmpid 这两个表的连接导致了锁表的数量超过了 MySQL 的限制。这可能是因为 MACG_papers_tmpid 是一个中间结果表，可能包含了大量的数据，而连接操作需要占用一定数量的锁。
-
-将sql操作改为pandas.Dataframe操作，不再报错，输出结果：
-
-```sh
-updating papers_field
-executing:  update papers_field set year = year(PublicationDate)
-time cost:  1.3622636795043945
-executing:  alter table papers_field add index(year)
-time cost:  6.731650352478027
-executing:  ALTER TABLE papers_field ADD citationCountByYear varchar(999)
-time cost:  0.18017005920410156
-executing:  update papers_field as PA, papers_field_citation_timeseries as PM set PA.citationCountByYear = PM.citationCountByYear where PA.paperID = PM.paperID
-time cost:  37.3734986782074
-updating authors_field
-executing:  create table authors_field_tmp select tmp.*, @curRank := @curRank + 1 AS authorRank from (select authorID, count(*) as PaperCount_field from paper_author_field group by authorID order by PaperCount_field desc) as tmp, (SELECT @curRank := 0) r
-time cost:  43.6377899646759
-executing:  create index author_index on authors_field_tmp(authorID)
-time cost:  15.976773500442505
-executing:  ALTER TABLE authors_field ADD PaperCount_field INT
-time cost:  0.04614853858947754
-executing:  ALTER TABLE authors_field ADD authorRank INT
-time cost:  0.049346923828125
-executing:  update authors_field, authors_field_tmp set authors_field.PaperCount_field = authors_field_tmp.PaperCount_field, authors_field.authorRank = authors_field_tmp.authorRank where authors_field.authorID = authors_field_tmp.authorID
-time cost:  122.98540711402893
-executing:  alter table authors_field add index(authorRank)
-time cost:  7.5114710330963135
-executing:  drop table authors_field_tmp
-time cost:  1.9482250213623047
-executing:  create table authors_field_tmp select sum(P.citationCount) as CitationCount_field,  authorID from papers_field as P join paper_author_field as PA on P.paperID = PA.paperID and P.CitationCount >=0 group by authorID
-time cost:  41.06043577194214
-executing:  create index id_index on authors_field_tmp(authorID)
-time cost:  30.40918254852295
-executing:  ALTER TABLE authors_field ADD CitationCount_field INT
-time cost:  0.18607759475708008
-executing:  update authors_field, authors_field_tmp set authors_field.CitationCount_field = authors_field_tmp.CitationCount_field where authors_field.authorID = authors_field_tmp.authorID
-time cost:  86.77558755874634
-executing:  drop table authors_field_tmp
-time cost:  2.4010915756225586
-executing:  ALTER TABLE authors_field ADD hIndex_field INT
-time cost:  0.059279441833496094
-executing:  create table paper_reference_field_labeled(
-citingpaperID varchar(15),
-citedpaperID varchar(15),
-extends_prob double
-)
-time cost:  0.0490565299987793
-executing:  ALTER TABLE authors_field ADD FellowType varchar(999)
-time cost:  0.05303478240966797
-executing:  update authors_field as af, scigene_acl_anthology.fellow as f set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
-time cost:  5.21049952507019
 ```
 
-```sh
-python update_top_author_field_hIndex.py 77088390
-```
-
-
-## scigene_physics_field
-
-输出结果：
-```sh
-6:34:05
-papers(paperID) original (735937, 8)
-papers(paperID) drop_duplicates (729964, 8)
-papers(paperID) time cost: 23722.209959745407
-
-7:09:55
-paper_author(paperID) original (1901573, 3)
-paper_author(paperID) drop_duplicates (1874240, 3)
-paper_author(paperID) time cost: 25926.57680273056
-
-4:54:40
-paper_reference(citingpaperID) original (3324155, 2)
-paper_reference(citingpaperID) drop_duplicates (3296656, 2)
-paper_reference(citingpaperID) time cost: 17701.392360925674
-
-4:03:35
-paper_reference(citedpaperID) original (2907791,2)              
-paper_reference(citedpaperID) drop_duplicates (2884629, 2)       
-paper_reference(citedpaperID) time cost: 14619.974665641785      
-paper_reference original (6181285, 2)                            
-paper_reference drop_duplicates (6132999, 2)  
-
-45:14
-authors(authorID) original (1380950, 5)                          
-authors(authorID) drop_duplicates (1380950, 5)                   
-authors(authorID) time cost: 2716.215271949768 
-
-(1380950, 5)                                                       
-executing:  ALTER TABLE papers_field ADD CONSTRAINT papers_field_pk PRIMARY KEY (paperID)                                              
-time cost:  21.612918376922607                                     
-executing:  alter table papers_field add index(citationCount)                                                                          
-time cost:  7.2761664390563965                                     
-executing:  alter table paper_author_field add index(paperID)                                                                          
-time cost:  11.043795347213745                                     
-executing:  alter table paper_author_field add index(authorID)                                                                         
-time cost:  11.775491714477539                                     
-executing:  alter table paper_author_field add index(authorOrder)                                                                      
-time cost:  9.764228582382202                                      
-executing:  alter table authors_field add index(authorID)                                                                              
-time cost:  9.621068239212036                                      
-executing:  alter table authors_field add index(name)                                                                                  
-time cost:  10.422689199447632                                     
-executing:  alter table paper_reference_field add index(citingpaperID) 
-time cost:  28.47778820991516
-executing:  alter table paper_reference_field add index(citedpaperID)
-time cost:  29.47544527053833
-executing:  ALTER TABLE paper_reference_field ADD CONSTRAINT paper_reference_field_pk PRIMARY KEY (citingpaperID,citedpaperID)
-time cost:  133.8593955039978
-creating papers_field_citation_timeseries_raw_raw
-creating MACG_papers_tmpid
-creating MACG_papers_tmp
-updating year
-creating papers_field_citation_timeseries_raw
-deleting rows with year <= 0
-selecting all raw paper years
-processing each citation count
-inserting into papers_field_citation_timeseries
-100%|████████████████████████████████████████| 31931/31931 [00:08<00:00, 3756.60it/s]
-updating papers_field
-executing:  update papers_field set year = year(PublicationDate)
-time cost:  21.70390558242798
-executing:  alter table papers_field add index(year)
-time cost:  12.307689428329468
-executing:  ALTER TABLE papers_field ADD citationCountByYear varchar(999)
-time cost:  0.09853434562683105
-executing:  update papers_field as PA, papers_field_citation_timeseries as PM set PA.citationCountByYear = PM.citationCountByYear where PA.paperID = PM.paperID
-time cost:  10.841958999633789
-updating authors_field
-executing:  create table authors_field_tmp select tmp.*, @curRank := @curRank + 1 AS authorRank from (select authorID, count(*) as PaperCount_field from paper_author_field group by authorID order by PaperCount_field desc) as tmp, (SELECT @curRank := 0) r
-time cost:  15.048639297485352
-executing:  create index author_index on authors_field_tmp(authorID)
-time cost:  15.170480966567993
-executing:  ALTER TABLE authors_field ADD PaperCount_field INT
-time cost:  0.06644439697265625
-executing:  ALTER TABLE authors_field ADD authorRank INT
-time cost:  0.08142232894897461
-executing:  update authors_field, authors_field_tmp set authors_field.PaperCount_field = authors_field_tmp.PaperCount_field, authors_field.authorRank = authors_field_tmp.authorRank where authors_field.authorID = authors_field_tmp.authorID
-time cost:  152.96477723121643
-executing:  alter table authors_field add index(authorRank)
-time cost:  9.41012167930603
-executing:  drop table authors_field_tmp
-time cost:  0.7245469093322754
-executing:  create table authors_field_tmp select sum(P.citationCount) as CitationCount_field,  authorID from papers_field as P join paper_author_field as PA on P.paperID = PA.paperID and P.CitationCount >=0 group by authorID
-time cost:  77.19298481941223
-executing:  create index id_index on authors_field_tmp(authorID)
-time cost:  14.674506902694702
-executing:  ALTER TABLE authors_field ADD CitationCount_field INT
-time cost:  0.09812712669372559
-executing:  update authors_field, authors_field_tmp set authors_field.CitationCount_field = authors_field_tmp.CitationCount_field where authors_field.authorID = authors_field_tmp.authorID
-time cost:  119.2219545841217
-executing:  drop table authors_field_tmp
-time cost:  0.9966509342193604
-executing:  ALTER TABLE authors_field ADD hIndex_field INT
-time cost:  0.07900786399841309
-executing:  create table paper_reference_field_labeled(
-citingpaperID varchar(15),
-citedpaperID varchar(15),
-extends_prob double
-)
-time cost:  0.05626392364501953
-executing:  ALTER TABLE authors_field ADD FellowType varchar(999)
-time cost:  0.09914207458496094
-executing:  update authors_field as af, scigene_acl_anthology.fellow as f set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
-time cost:  2.1279916763305664
-```
+可能是由于 MACG_papers 和 MACG_papers_tmpid 这两个表的连接导致了锁表的数量超过了 MySQL 的限制。这可能是因为 MACG_papers_tmpid 是一个中间结果表，可能包含了大量的数据，而连接操作需要占用一定数量的锁。将sql操作改为pandas.Dataframe操作，不再报错

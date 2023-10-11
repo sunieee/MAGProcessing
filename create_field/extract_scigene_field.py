@@ -19,18 +19,57 @@ GROUP_SIZE = 100
 # extract paperID
 # 根据领域名称查询fieldID，如： select * from field_of_study where name='Database';
 ####################################################################################
-sql_data = '''select paperID from papers_field where fieldID = '''+'\''+field_+'\';'
-db_data = pd.read_sql_query(sql_data, engine_MAG)
-MAG=db_data['paperID'].values
-print('finish reading MAG list from sql, saving to txt', len(MAG))
+
+def read_papers(fields, verbose=True):
+    paper_ids = set()
+    for fieldID in tqdm(set(fields)):
+        sql_data = f'select paperID from papers_field where fieldID=\'{fieldID}\';'
+        if verbose:
+            print('*', sql_data)
+        db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
+        paper_ids.update(db_data_single)
+        if verbose:
+            print(f'finish reading paperID on field {fieldID}, added:', len(db_data_single))
+    return paper_ids
+
+db_data = read_papers(field_info['fieldID'])
+print(f'## finish reading paperID on fieldID:', len(db_data))
+
+for fieldID in set(field_info.get('children', [])):
+    sql_data = f'select childrenID FROM field_children where parentID=\'{fieldID}\';'
+    children_fields = pd.read_sql_query(sql_data, engine_MAG).values.ravel().tolist()
+    print('*', sql_data, len(children_fields))
+    db_data_single = read_papers(children_fields, verbose=False)
+    db_data.update(db_data_single)
+    print(f'finish reading paperID on children of {fieldID}, added:', len(db_data_single))
+print(f'## finish reading paperID on children:', len(db_data))
+
+for journalID in tqdm(set(field_info.get('JournalID', []))):
+    sql_data = f'select paperID from papers where JournalID=\'{journalID}\';'
+    print('*', sql_data)
+    db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
+    db_data.update(db_data_single)
+    print(f'finish reading paperID on Journal {journalID}, added:', len(db_data_single))
+print(f'## finish reading paperID on Journal:', len(db_data))
+
+for conferenceID in tqdm(set(field_info.get('ConferenceID', []))):
+    sql_data = f'select paperID from papers where ConferenceID=\'{conferenceID}\';'
+    print('*', sql_data)
+    db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
+    db_data.update(db_data_single)
+    print(f'finish reading paperID on Conference {conferenceID}, added:', len(db_data_single))
+print(f'## finish reading paperID on Conference:', len(db_data))
+
+papers = list(db_data)
+print('# finish reading MAG list from sql, saving to txt', len(papers))
 
 # save list(MAG) to a txt file
-np.savetxt('out/MAG_'+field_+'.txt', MAG, fmt='%s')
-print('finish saving MAG list to txt file')
+np.savetxt(f'out/{database}/papers.txt', papers, fmt='%s')
+print('# finish saving MAG list to txt file')
 
 # read MAG paperID list from txt file: MAG_field.txt
-MAG = list(np.loadtxt('out/MAG_'+field_+'.txt', dtype=str))
-print('finish reading MAG list from txt file', len(MAG))
+papers = list(np.loadtxt(f'out/{database}/papers.txt', dtype=str))
+print('# finish reading MAG list from txt file', len(papers))
 
 
 ####################################################################################
@@ -38,7 +77,7 @@ print('finish reading MAG list from txt file', len(MAG))
 # 从mysql中获取papers, paer_auther, paper_reference, authors四个表的field子数据，并保存到本地文件
 ####################################################################################
 
-def get_data_from_table(table_name, key='paperID', data=MAG):
+def get_data_from_table(table_name, key='paperID', data=papers):
     t = time.time()
     db = pd.DataFrame()
     for i in tqdm(range(0, len(data), GROUP_SIZE)):
@@ -59,8 +98,8 @@ def get_data_from_table(table_name, key='paperID', data=MAG):
     db.name = table_name
     return db
 
-def get_data_from_table_concurrent(table_name, key='paperID', data=MAG):
-    print(f'Getting {table_name}({key}) from MAG')
+def get_data_from_table_concurrent(table_name, key='paperID', data=papers):
+    print(f'# Getting {table_name}({key}) from MAG')
     t = time.time()
     db = pd.DataFrame()
     query_params = [data[i:i+GROUP_SIZE] for i in range(0, len(data), GROUP_SIZE)]
@@ -87,12 +126,12 @@ def get_data_from_table_concurrent(table_name, key='paperID', data=MAG):
 
 
 try:
-    get_data_from_table_concurrent('papers').to_csv(f'out/papers_{field_}.csv',index=False)
+    get_data_from_table_concurrent('papers').to_csv(f'out/{database}/papers.csv',index=False)
 except KeyboardInterrupt:
     pass
 
 try:
-    get_data_from_table_concurrent('paper_author').to_csv(f'out/paper_author_{field_}.csv',index=False)
+    get_data_from_table_concurrent('paper_author').to_csv(f'out/{database}/paper_author.csv',index=False)
 except KeyboardInterrupt:
     pass
 
@@ -107,13 +146,13 @@ try:
     print('paper_reference original', db.shape)
     db=db.drop_duplicates()
     print('paper_reference drop_duplicates', db.shape)
-    db.to_csv(f'out/paper_reference_{field_}.csv',index=False)
+    db.to_csv(f'out/{database}/paper_reference.csv',index=False)
 except KeyboardInterrupt:
     pass
 
-paper_author_MAG = pd.read_csv(f'out/paper_author_{field_}.csv')
+paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
 authors=paper_author_MAG['authorID'].drop_duplicates().values
-get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/authors_{field_}.csv',index=False)
+get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/{database}/authors.csv',index=False)
 
 
 
@@ -121,7 +160,7 @@ get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f
 # to_sql
 # 读取四个子表，并上传到mysql。创建表后添加领域子表的mysql索引（例如在scigene_database_field库）
 ####################################################################################
-df_papers_MAG = pd.read_csv(f'out/papers_{field_}.csv')
+df_papers_MAG = pd.read_csv(f'out/{database}/papers.csv')
 print(df_papers_MAG)
 print(df_papers_MAG.shape)
 df_papers_MAG=df_papers_MAG.drop_duplicates()
@@ -131,7 +170,7 @@ df_papers_MAG.to_sql('papers_field',con=engine,if_exists='replace',index=False, 
         "rank":sqlalchemy.types.INTEGER(),"referenceCount":sqlalchemy.types.INTEGER(),"citationCount":sqlalchemy.types.INTEGER(),"PublicationDate":sqlalchemy.types.Date()})
 
 
-paper_author_MAG = pd.read_csv(f'out/paper_author_{field_}.csv')
+paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
 print(paper_author_MAG)
 print(paper_author_MAG.shape)
 paper_author_MAG=paper_author_MAG.drop_duplicates()
@@ -140,7 +179,7 @@ paper_author_MAG.to_sql('paper_author_field',con=engine,if_exists='replace',inde
     "authorID": sqlalchemy.types.NVARCHAR(length=15),"authorOrder":sqlalchemy.types.INTEGER()})
 
 
-df_paper_reference_MAG = pd.read_csv(f'out/paper_reference_{field_}.csv')
+df_paper_reference_MAG = pd.read_csv(f'out/{database}/paper_reference.csv')
 print(df_paper_reference_MAG)
 print(df_paper_reference_MAG.shape)
 df_paper_reference_MAG=df_paper_reference_MAG.drop_duplicates()
@@ -149,7 +188,7 @@ df_paper_reference_MAG.to_sql('paper_reference_field',con=engine,if_exists='repl
     "citedpaperID": sqlalchemy.types.NVARCHAR(length=15)})
 
 
-authors_MAG = pd.read_csv(f'out/authors_{field_}.csv')
+authors_MAG = pd.read_csv(f'out/{database}/authors.csv')
 print(authors_MAG)
 print(authors_MAG.shape)
 authors_MAG=authors_MAG.drop_duplicates()

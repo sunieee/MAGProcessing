@@ -1,13 +1,26 @@
 import math
 from utils import *
+import json
 
 connField = pymysql.connect(host='localhost',
                             port=3306,
                             user='root',
                             password='root',
-                            db=f"scigene_{fieldName}_field",
+                            db=f"{database}",
                             charset='utf8')
 cursorField = connField.cursor()
+
+# load all the maps to data/{database}/map/*.json with same name
+with open(f"data/{database}/map/firstAuthorPaperCountMap.json", "r") as f:
+    firstAuthorPaperCountMap = json.load(f)
+with open(f"data/{database}/map/firstAuthorWeightedPaperCountMap.json", "r") as f:
+    firstAuthorWeightedPaperCountMap = json.load(f)
+with open(f"data/{database}/map/coAuthorWeightedPaperCountMap.json", "r") as f:
+    coAuthorWeightedPaperCountMap = json.load(f)
+with open(f"data/{database}/map/coAuthorPaperCountMap.json", "r") as f:
+    coAuthorPaperCountMap = json.load(f)
+with open(f"data/{database}/map/topAuthorPaperCountMap.json", "r") as f:
+    topAuthorPaperCountMap = json.load(f)
 
 MIN_STUDENT_AUTHOR_ORDER = 3
 MIN_SUPERVISOR_RATE = 0.5
@@ -158,123 +171,6 @@ def compute_supervisor_rate(studentID, supervisorID, year, paperID):
     return maxSupervisedRate * supervisingRate
 
 
-# pre-compute some maps
-######################################################################
-# 从数据库中查询某个领域的论文作者信息，并基于查询结果构建两个映射：
-# 1. firstAuthorPaperCountMap：映射每个作者ID到一个子映射，其中子映射的键是年份，值是该年份的论文数量。
-# 2. firstAuthorWeightedPaperCountMap：与上面的映射类似，但值是加权的论文数量，
-#       其中权重是1/作者顺序，但仅考虑作者顺序小于或等于MIN_STUDENT_AUTHOR_ORDER的作者。
-######################################################################
-
-try:
-    execute(f"""
-create table firstAuthorTmp 
-    select PA2.authorID as firstAuthorID, PA1.authorID as topAuthorID 
-    from scigene_{fieldName}_field.authors_field as A 
-    join scigene_{fieldName}_field.paper_author_field as PA1 on A.authorID = PA1.authorID 
-    join scigene_{fieldName}_field.paper_author_field as PA2 on PA1.paperID = PA2.paperID 
-    where A.{filterCondition} 
-        and PA1.authorOrder > 1 and PA2.authorOrder = 1 
-    group by PA2.authorID, PA1.authorID;
-            
-create index first_author_index on firstAuthorTmp(firstAuthorID);
-            
-create index top_author_index on firstAuthorTmp(topAuthorID);""")
-except Exception as e:
-    print("FirstAuthorTmp exists", e)
-
-print("Create temp table for the list of first authors!")
-
-rows = executeFetch(f"""
-select authorID, authorOrder, year, count(*) as cnt 
-    from scigene_{fieldName}_field.paper_author_field as PA, 
-        scigene_{fieldName}_field.papers_field as P 
-    where authorID in (select distinct firstAuthorID from firstAuthorTmp) and PA.paperID = P.paperID 
-    group by authorID, authorOrder, year;""")
-firstAuthorPaperCountMap = {}
-firstAuthorWeightedPaperCountMap = {}
-
-for authorID, authorOrder, year, count in rows:
-    authorID = authorID.strip()
-    authorOrder = int(authorOrder)
-    year = int(year)
-    count = int(count)
-
-    # 更新firstAuthorPaperCountMap
-    yearCountMap = firstAuthorPaperCountMap.setdefault(authorID, {})
-    yearCountMap[year] = yearCountMap.get(year, 0) + count
-
-    # 更新firstAuthorWeightedPaperCountMap
-    if authorOrder <= MIN_STUDENT_AUTHOR_ORDER:
-        yearWeightedCountMap = firstAuthorWeightedPaperCountMap.setdefault(authorID, {})
-        yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
-
-
-######################################################################
-# 从数据库中查询某个领域的论文合作者信息，并基于查询结果构建两个映射：
-# 1. coAuthorWeightedPaperCountMap：映射每个合作者ID对（由两个作者ID组成）到一个子映射，
-#   其中子映射的键是年份，值是加权的论文数量，其中权重是1/作者顺序。
-# 2. coAuthorPaperCountMap：与上面的映射类似，但值是该年份的论文数量。
-######################################################################
-print("Pre-compute first-author maps!")
-
-rows = executeFetch(f"""
-select firstAuthorID, topAuthorID, PA1.authorOrder as firstAuthorOrder, year, count(*) as cnt 
-    from firstAuthorTmp 
-    join scigene_{fieldName}_field.paper_author_field as PA1 on firstAuthorID = PA1.authorID 
-    join scigene_{fieldName}_field.paper_author_field as PA2 on topAuthorID = PA2.authorID 
-        and PA1.paperID = PA2.paperID and PA1.authorOrder <= {MIN_STUDENT_AUTHOR_ORDER} 
-        and PA1.authorOrder < PA2.authorOrder 
-    join scigene_{fieldName}_field.papers_field as P on PA1.paperID = P.paperID 
-    group by firstAuthorID, topAuthorID, PA1.authorOrder, year;
-""")
-coAuthorWeightedPaperCountMap = {}
-coAuthorPaperCountMap = {}
-
-# 处理查询结果
-for firstAuthorID, topAuthorID, authorOrder, year, count in rows:
-    coAuthorID = f"{firstAuthorID.strip()}-{topAuthorID.strip()}"
-    authorOrder = int(authorOrder)
-    year = int(year)
-    count = int(count)
-
-    # 更新coAuthorWeightedPaperCountMap
-    yearWeightedCountMap = coAuthorWeightedPaperCountMap.setdefault(coAuthorID, {})
-    yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
-
-    # 更新coAuthorPaperCountMap
-    yearCountMap = coAuthorPaperCountMap.setdefault(coAuthorID, {})
-    yearCountMap[year] = yearCountMap.get(year, 0) + count
-
-
-######################################################################
-# 这段代码的目的是处理查询结果，并基于这些结果构建一个映射topAuthorPaperCountMap。
-# 这个映射的键是作者ID，值是另一个映射，其中子映射的键是年份，值是该年份的论文数量。
-######################################################################
-print("Pre-compute co-author maps!")
-
-rows = executeFetch(f"""
-select A.authorID, year, count(*) as cnt 
-    from scigene_{fieldName}_field.authors_field as A 
-    join scigene_{fieldName}_field.paper_author_field as PA 
-        on A.{filterCondition}
-        and A.authorID = PA.authorID  
-    join scigene_{fieldName}_field.papers_field as P on PA.paperID = P.paperID 
-    group by A.authorID, year;""")
-
-topAuthorPaperCountMap = {}
-
-for authorID, year, count in rows:
-    authorID = authorID.strip()
-    year = int(year)
-    count = int(count)
-
-    # 更新topAuthorPaperCountMap
-    yearCountMap = topAuthorPaperCountMap.setdefault(authorID, {})
-    yearCountMap[year] = yearCountMap.get(year, 0) + count
-
-
-
 ######################################################################
 # 从数据库中查询某个领域的前几名作者。
 # 对于每位作者，查询他们的论文信息。
@@ -284,20 +180,17 @@ for authorID, year, count in rows:
 # 更新数据库中的论文记录，标记它是否是关键论文。
 # 提交数据库更改。
 ######################################################################
-print("Pre-compute top author maps!")
-rows = executeFetch(f"""
-select authorID, name, authorRank 
-    from scigene_{fieldName}_field.authors_field 
-    where {filterCondition};""")
+print('## start to process each author (key paper)', len(authors_rows))
+count = 0
+for row in tqdm(authors_rows):
+    authorID = row[0].strip()
+    authorName = row[1].strip()
+    rank = int(row[2])
+    count += 1
+    print(f'### ({count}/{len(authors_rows)})', authorID, authorName, rank)
 
-# process each author
-for topAuthorID, authorName, rank in rows:
-    topAuthorID = topAuthorID.strip()
-    authorName = authorName.strip()
-    rank = int(rank)
-
-    authorTableName = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
-    paper_rows = executeFetch(f"select paperID, year, firstAuthorID from papers_{authorTableName}")
+    # authorID = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
+    paper_rows = executeFetch(f"select paperID, year, firstAuthorID from papers_{authorID}")
 
     print('='*20, authorName, '='*20)
     # process each paper of the author
@@ -308,18 +201,18 @@ for topAuthorID, authorName, rank in rows:
             # firstAuthorID = executeFetch(f"select authorID from MACG.paper_author where paperID='{paperID}' and authorOrder=1")
             # firstAuthorID = firstAuthorID[0][0]
             # print(firstAuthorID)    # [('3137927773',)] -> '3137927773'
-            # execute(f"update papers_{authorTableName} set firstAuthorID='{firstAuthorID}' where paperID='{paperID}';")
+            # execute(f"update papers_{authorID} set firstAuthorID='{firstAuthorID}' where paperID='{paperID}';")
             # print('update firstAuthorID:', firstAuthorID, 'for paperID:', paperID)
             print('Target paper do not have first author, skip!', paperID)
             continue
 
         firstAuthorID = str(paper_row[2].strip())
 
-        if firstAuthorID == topAuthorID:
+        if firstAuthorID == authorID:
             isKeyPaper = 1
         else:
             # try:
-            isKeyPaper = compute_supervisor_rate(firstAuthorID, topAuthorID, paperYear, paperID)
+            isKeyPaper = compute_supervisor_rate(firstAuthorID, authorID, paperYear, paperID)
             # except Exception as e:
             #     print('The row is not valid:')
             #     print('firstAuthorID:', firstAuthorID)
@@ -329,13 +222,10 @@ for topAuthorID, authorName, rank in rows:
             #     print(e)
             #     exit(0)
 
-        cursor.execute(f"update papers_{authorTableName} set isKeyPaper = %s where paperID = %s", (isKeyPaper, paperID))
+        cursor.execute(f"update papers_{authorID} set isKeyPaper = %s where paperID = %s", (isKeyPaper, paperID))
 
-    print(f"Update key papers for field author {authorName} with rank {rank}: authorTableName",)
+    print(f"Update key papers for field author {authorName} with rank {rank}: authorID",)
     conn.commit()
-
-cursor.execute("drop table firstAuthorTmp;")
-conn.commit()
 
 
 cursor.close()

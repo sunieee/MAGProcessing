@@ -33,16 +33,15 @@ for f in os.listdir(node_dir):
         df['citationContext'] = None
         # print(df.head())
         
-
-        for i in range(len(df)//10):
+        for i in range(len(df)):
             citing = df.iloc[i]['childrenID']
             cited = df.iloc[i]['parentID']
             result = executeFetch(
                 f"select citation_context from CitationContextContent where citingpaperID='{citing}' and citedpaperID='{cited}'", 
                 cursor=cursor118)
             if result:
-                df.iloc[i]['citationContext'] = ' '.join(result[0])
+                df.at[i, 'citationContext'] = ' '.join(result[0])
 
         print(df.head())
-        # df.to_csv(f"link_{authorID}.csv", index=False)
+        df.to_csv(os.path.join(node_dir, f"links_{authorID}.csv"), index=False)
 

@@ -1,0 +1,44 @@
+scigene_vis_field:
+  fieldID:
+    - 159384605 # Music visualization
+    - 36464697  # Visualization
+    - 4379982   # Software visualization
+    - 83893533  # Flow visualization
+
+scigene_visualization_field:
+  fieldID:
+    - 159384605 # Music visualization
+    - 36464697  # Visualization
+    - 4379982   # Software visualization
+    - 83893533  # Flow visualization
+    - 59732488  # Visual analytics
+  children:     # search the direct children of the fieldID
+    - 36464697  # Visualization
+  ConferenceID:
+    - 2757964222
+    - 2754539197
+    - 2754685548
+    - 1161805661
+    - 1200770042
+    - 2537178404
+    - 1200145187
+    - 2754213367
+    - 1168254271
+    - 2625874324
+    - 2759977425
+    - 1191926394
+    - 2898476843
+    - 1148385487
+    - 2625527217
+  JournalID:
+    - 10355277
+    - 84775595
+    - 2898150413
+    - 67831204
+    - 55152591
+
+scigene_database_field:
+  fieldID: 77088390
+
+scigene_physics_field:
+  fieldID: 121332964

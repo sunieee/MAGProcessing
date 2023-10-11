@@ -11,6 +11,10 @@ import json
 import pandas as pd
 import gensim
 from gensim.parsing.preprocessing import preprocess_string
+import multiprocessing
+from utils import *
+
+
 gensim.parsing.preprocessing.STOPWORDS = set()
 def strip_short2(s, minsize=1):
     s = utils.to_unicode(s)         #hajičová在数据库里是hajicova,因此没匹配上'Eva Hajičová'
@@ -86,7 +90,6 @@ def compare_name(n1,n2, levensimrate=0.7):
     penalty=min(penalty_1,penalty_2)+1
     return min(1.0, float(1/penalty))
 
-
 def compare_nametb(tb1,tb2):
     tb1_dict={ele:[0,[]] for ele in tb1}
     tb2_dict={ele:[0,[]] for ele in tb2}
@@ -146,7 +149,6 @@ def parse_pinyin2(word):
         flag_pinyin = False
     return output,flag_pinyin
 
-
 def levenshtein_distance(s1, s2):
     if len(s1) > len(s2):
         s1, s2 = s2, s1
@@ -179,65 +181,98 @@ def test():
         levenshtein_distance(s1, s2) # / max(len(s1), len(s2))
     print('time', time.time() - t)
 
-
-class NumpyEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types """
-
-    def default(self, obj):
-        if isinstance(obj, (numpy.int_, numpy.intc, numpy.intp, numpy.int8,
-                            numpy.int16, numpy.int32, numpy.int64, numpy.uint8,
-                            numpy.uint16, numpy.uint32, numpy.uint64)):
-            return int(obj)
-        elif isinstance(obj, (numpy.float_, numpy.float16, numpy.float32,
-                              numpy.float64)):
-            return float(obj)
-        elif isinstance(obj, (numpy.ndarray,)):
-            return obj.tolist()
-        elif isinstance(obj, (numpy.bool_,)):
-            return bool(obj)
-        return json.JSONEncoder.default(self, obj)
     
+filterCondition = 'PaperCount_field > 10'
+print(filterCondition)
+df = pd.read_sql_query(f'select * from authors_field where {filterCondition}', engine)
 
-if __name__ == "__main__":
-    df = pd.read_csv('out/top_field_authors.csv', sep=',', header=None)
-    df.columns = ['authorId', 'rank', 'name', '#paper', '#citation', 'hIndex', 'r'] + list(range(3))
-    print(df)
-    author_ids = df['authorId']
-    author_ranks = df['r']
-    author_names = df['name']
-    lev_file = 'lev.json'
+print(df.shape)
+print(df.head())
 
-    if os.path.exists(lev_file):
-        with open (lev_file, 'r') as f:
-            lev_lis = json.load(f)
-    else:
-        lev_dic = {}
-        for i in tqdm(range(len(author_names))):
-            for j in range(len(author_names)):
-                if i < j:
-                    lev_dic[(i,j)] = levenshtein_distance(author_names[i], author_names[j]) / (len(author_names[i]) + len(author_names[j]))
-        # sort lev_dic by values
-        lev_lis = list(sorted(lev_dic.items(), key=lambda item: item[1]))
+'''
+(5984, 9)
+     authorID   rank               name  PaperCount  CitationCount  PaperCount_field  authorRank  CitationCount_field  hIndex_field
+0  1166287365  14614    Dorian Liepmann         141           4527                12        4864                  606           NaN
+1  2032738043  13085  Peter Brusilovsky         523          19831                71         194                 1147          20.0
+2  2040206780  14993       Amy A. Gooch          52           2934                14        3642                  236           NaN
+3  2073393117  17045      Rachid Gherbi          39            146                16        3016                   48           NaN
+4  2094673208  17259          Ilmi Yoon          33            170                12        5075                  105           NaN
+'''
 
-        # save dic to local
-        with open('out/lev.json', 'w') as f:
-            json.dump(lev_lis, f, cls=NumpyEncoder)
+author_ids = df['authorID']
+author_names = df['name']
+author_names_len = [len(name) for name in author_names]
+lev_file = f'out/{database}/lev.json'
+
+def compute_levenshtein(pair):
+    i, j = pair
+    return pair, levenshtein_distance(author_names[i], author_names[j]) / (author_names_len[i] + author_names_len[j])
+
+if os.path.exists(lev_file):
+    with open (lev_file, 'r') as f:
+        lev_lis = json.load(f)
+else:
+    lev_dic = {}
+    pairs = []
+    print('filtering pairs...')
+    for i in tqdm(range(len(author_names))):
+        for j in range(len(author_names)):
+            if i < j:
+                la = author_names_len[i]
+                lb = author_names_len[j]
+                if abs(la - lb) / (la + lb) < 0.2: # and abs(math.log2(la) - math.log2(lb)) < 1:
+                    pairs.append((i,j))
+
+    # for i, j in tqdm(pairs):
+    #     lev_dic[(i,j)] = levenshtein_distance(author_names[i], author_names[j]) / (len(author_names[i]) + len(author_names[j]))
+    # 使用多进程计算编辑距离
+    print('computing levenshtein distances...(2min)')
+    # 为了最大化并行计算的效率，进程的数量设置为与CPU核心数相同是一个好的起点。
+    # 但是，最佳的进程数量可能还取决于具体的任务和其他系统负载
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        # 创建一个进度条
+        # pbar = tqdm(total=len(pairs))
+        # # 使用imap或imap_unordered，并迭代结果来更新进度条
+        # results = []
+        # for result in pool.imap(compute_levenshtein, pairs):
+        #     results.append(result)
+        #     pbar.update()
+        # pbar.close()
+
+        # 有进度条只有33%，没有进度条能够达到100%CPU利用率，20min程序总共1min跑完
+        results = pool.map(compute_levenshtein, pairs)
+    lev_dic = dict(results)
     
-    match_groups = pd.DataFrame(columns=['id1', 'id2', 'r1', 'r2', 'name1', 'name2', 'lev_dis', 'similarity'])
-    
-    for group in tqdm([g for g in lev_lis if g[1] <= 0.3]):
-        ix1, ix2 = group[0]
-        similarity = compare_name(author_names[ix1], author_names[ix2])
-        match_groups.loc[len(match_groups)] = {
-            'id1': author_ids[ix1],
-            'id2': author_ids[ix2],
-            'r1': author_ranks[ix1],
-            'r2': author_ranks[ix2],
-            'name1': author_names[ix1],
-            'name2': author_names[ix2],
-            'lev_dis': group[1],
-            'similarity': similarity
-        }
+    # sort lev_dic by values
+    lev_lis = list(sorted(lev_dic.items(), key=lambda item: item[1]))
+    lev_lis = [g for g in lev_lis if g[1] <= 0.25]
 
-    match_groups[match_groups['similarity'] > 0.96 & match_groups['lev_dis'] < 0.1].to_csv('out/match.csv')
-    match_groups.to_csv('out/match_groups.csv', encoding='UTF-8')
+    with open(lev_file, 'w') as f:
+        json.dump(lev_lis, f, cls=NumpyEncoder)
+
+groups = pd.DataFrame(columns=['id1', 'id2', 'name1', 'name2', 'lev_dis', 'similarity'])
+
+def process_group(group):
+    ix1, ix2 = group[0]
+    similarity = compare_name(author_names[ix1], author_names[ix2])
+    return {
+        'id1': author_ids[ix1],
+        'id2': author_ids[ix2],
+        'name1': author_names[ix1],
+        'name2': author_names[ix2],
+        'lev_dis': group[1],
+        'similarity': similarity
+    }
+
+print(f'comparing names on {len(lev_lis)} pairs...(1min)')
+with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+    results = pool.map(process_group, lev_lis)
+
+# 将结果合并到groups
+for result in results:
+    groups.loc[len(groups)] = result
+
+
+groups.to_csv(f'out/{database}/groups.csv', encoding='UTF-8')
+
+groups[(groups['similarity'] > 0.96) & (groups['lev_dis'] < 0.1)].to_csv(f'out/{database}/match.csv')

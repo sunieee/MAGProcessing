@@ -3,35 +3,64 @@ from sqlalchemy import create_engine
 import time
 import sys
 import os
+from tqdm import tqdm
+import math
+import json
 
-fieldName = os.environ.get('fieldName', 'visualization')
-numOfTopAuthors = os.environ.get('numOfTopAuthors', 1100)
-numOfTopAuthors = int(numOfTopAuthors)
 
-# filterCondition = f"authorRank <= {numOfTopAuthors}"
+# 多进程下序号
+if len(sys.argv) <= 1:
+    order = '1/1'
+else:
+    order = sys.argv[1]
+
+print('multiprocessing order:', order)
+
+database = os.environ.get('database', 'scigene_visualization_field')
+database_pcg = database + "_pcg"
+# numOfTopAuthors = os.environ.get('numOfTopAuthors', 1100)
+# numOfTopAuthors = int(numOfTopAuthors)
+
+filterCondition = f"PaperCount_field > 10"
 
 # 对于 authorID 的限制
-with open('data/test.txt', 'r') as f:
-    authorID_list = f.read().split()
+# with open('data/test.txt', 'r') as f:
+#     authorID_list = f.read().split()
 # authorID_list = ['2147343253', '2076420186', '2122885999', 
 #                  '2003408012', '2762167099', '2158935544']
 # authorID_list = ['3206897746']
 
-ids_string = ', '.join(map(str, authorID_list))
-filterCondition = f"authorID IN ({ids_string})"
-print(filterCondition)
-
+# ids_string = ', '.join(map(str, authorID_list))
+# filterCondition = f"authorID IN ({ids_string})"
+# print(filterCondition)
 # authorRank > 1000 and authorRank <= {numOfTopAuthors};
 
-database = f"scigene_{fieldName}_field_pcg"
-engine = create_engine(f"mysql+pymysql://root:root@192.168.0.140:3306/{database}?charset=utf8")
-conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=database,
-                            charset='utf8')
-cursor = conn.cursor()
+def create_connection(database):
+    conn = pymysql.connect(host='localhost',
+                                user='root',
+                                password='root',
+                                db=database,
+                                charset='utf8')
+    return conn, conn.cursor()
+
+
+def init_connection(database):
+    try:
+        return create_connection(database)
+    except:
+        # Connect to the MySQL server without selecting a database
+        conn = pymysql.connect(host='localhost', user='root', password='root')
+        cursor = conn.cursor()
+        cursor.execute(f"SHOW DATABASES LIKE '{database}'")
+        if not cursor.fetchone():
+            cursor.execute(f"CREATE DATABASE {database}")
+        conn.commit()
+
+        return create_connection(database)
+    
+conn, cursor = init_connection(database_pcg)
+engine = create_engine(f"mysql+pymysql://root:root@192.168.0.140:3306/{database_pcg}?charset=utf8")
+
 
 # 当你使用pymysql直接创建的连接，它返回的是一个原生的MySQL连接，
 # 而pandas的to_sql方法期望一个SQLAlchemy引擎作为其连接参数。
@@ -50,7 +79,7 @@ def execute(sql):
         _sql = _sql.strip()
         if _sql == '':
             continue
-        print('executing: ', _sql)
+        print('* execute', _sql)
         t = time.time()
         cursor.execute(_sql)
         conn.commit()
@@ -59,8 +88,29 @@ def execute(sql):
 
 def executeFetch(sql):
     sql = sql.strip()
+    print('* executeFetch', sql)
     t = time.time()
     cursor.execute(sql)
     rows = cursor.fetchall()
     print('[time cost: ', time.time()-t, ']')
     return rows
+
+def try_execute(sql):
+    try:
+        cursor.execute(sql)
+    except:
+        pass
+    conn.commit()
+
+# select exact top field authors
+authors_rows = executeFetch(f"""
+select authorID, name, authorRank, PaperCount_field 
+    from {database}.authors_field
+    where {filterCondition} order by authorID;""")
+
+o1, o2 = order.split('/')
+o1, o2 = int(o1), int(o2)
+length = math.ceil(len(authors_rows) / o2)
+authors_rows = authors_rows[(o1-1) * length: o1 * length]
+
+print('# process range:', (o1-1) * length, o1 * length, 'length:', len(authors_rows))
