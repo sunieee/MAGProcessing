@@ -208,6 +208,9 @@ alter table authors_field add index(name);
 alter table paper_reference_field add index(citingpaperID);
 alter table paper_reference_field add index(citedpaperID);
 ALTER TABLE paper_reference_field ADD CONSTRAINT paper_reference_field_pk PRIMARY KEY (citingpaperID,citedpaperID);
+
+alter table papers_field ADD abstract mediumtext;
+update papers_field as P, MACG.abstracts as abs set P.abstract = abs.abstract where P.paperID = abs.paperID        
 ''')
        
 '''

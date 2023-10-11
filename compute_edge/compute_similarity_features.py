@@ -18,8 +18,6 @@ x_train = []
 # 一旦模型被训练，你可以多次使用它来推断新的文档向量，而不需要重新训练。
 # RETRAIN_GENSIM = False 时，加载已经训练好的模型，并使用它来推断新的文档向量
 ############################################################
-RETRAIN_GENSIM = False
-
 # read all the selected papers in MAG
 db_suffix = 'ARC' if database=="scigene_acl_anthology" else 'field'
 db = pd.read_sql_query(f'''select paperID, title, abstract 
@@ -41,23 +39,31 @@ result = [row + [row[0], row[0]] for row in result]
 stoplist = set(stopwords.words('english'))
 def tokenize(text):
     return [word for word in utils.tokenize(text.lower()) if word not in stoplist]
-result = [tokenize(' '.join([str(item) if item else '' for item in row]).lower()) for row in result]
+
+result_token = []
+for row in tqdm(result):
+    result_token.append(tokenize(' '.join([str(item) if item else '' for item in row]).lower()))
 
 # Create TaggedDocument for training
-x_train = [gensim.models.doc2vec.TaggedDocument(words=row, tags=[i]) for i, row in enumerate(result)]
+x_train = [gensim.models.doc2vec.TaggedDocument(words=row, tags=[i]) for i, row in enumerate(result_token)]
 
 # Train the Doc2Vec model
-if RETRAIN_GENSIM:
+if os.path.exists(f"out/{database}/model1.txt"):
+    # Load the trained model
+    model = gensim.models.doc2vec.Doc2Vec.load(f"out/{database}/model1.txt")
+else:
+    print('start training gensim')
+    t = time.time()
     model = gensim.models.doc2vec.Doc2Vec(vector_size=2, min_count=5, epochs=20)
     model.build_vocab(x_train)
     model.train(x_train, total_examples=model.corpus_count, epochs=model.epochs)
-    model.save("model1.txt")
-else:
-    # Load the trained model
-    model = gensim.models.doc2vec.Doc2Vec.load("model1.txt")
+    model.save(f"out/{database}/model1.txt")
+    print('finish training gensim, time cost:', time.time()-t)
 
 # Infer vectors for each document
-output = [model.infer_vector(doc.words) for doc in x_train]
+output = []
+for doc in tqdm(x_train):
+    output.append(model.infer_vector(doc.words))
 
 # Create a DataFrame with the features
 df_feature = pd.DataFrame(output)
@@ -68,6 +74,6 @@ df_feature = df_feature.drop_duplicates()
 df_feature = df_feature[df_feature['paperID'] != 'paperID']
 
 # Save to CSV
-df_feature.to_csv('out/similarity_features.csv', index=False)
+df_feature.to_csv(f'out/{database}/similarity_features.csv', index=False)
 print('similarity_features saved', len(df_feature))
 print(df_feature.head())

@@ -65,30 +65,30 @@ extends_prob double
 # 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
 # 以反映其影响力和论文引用分布情况。
 #######################################################################
-numOfTopAuthors = 1100
-# filterCondition = f'authorRank <= {numOfTopAuthors}';
-filterCondition = f'PaperCount_field > 10';
+# numOfTopAuthors = 1100
+# # filterCondition = f'authorRank <= {numOfTopAuthors}';
+# filterCondition = f'PaperCount_field > 10';
 
-# select all top field authors
-cursor.execute(f"select authorID, name, PaperCount_field, authorRank from {database}.authors_field where {filterCondition};")
-rows = cursor.fetchall()
+# # select all top field authors
+# cursor.execute(f"select authorID, name, PaperCount_field, authorRank from {database}.authors_field where {filterCondition};")
+# rows = cursor.fetchall()
 
-# process each author
-for row in tqdm(rows):
-    authorID = row[0].strip()
-    cursor.execute("""select P.CitationCount from papers_field as P 
-                   join paper_author_field as PA 
-                   on PA.authorID = %s and P.paperID = PA.paperID;""", authorID)
-    citations = [int(citation_row[0]) for citation_row in cursor.fetchall()]
-    citations.sort(reverse=True)
-    hIndex_field = sum(1 for i, citation in enumerate(citations) if citation > i)
+# # process each author
+# for row in tqdm(rows):
+#     authorID = row[0].strip()
+#     cursor.execute("""select P.CitationCount from papers_field as P 
+#                    join paper_author_field as PA 
+#                    on PA.authorID = %s and P.paperID = PA.paperID;""", authorID)
+#     citations = [int(citation_row[0]) for citation_row in cursor.fetchall()]
+#     citations.sort(reverse=True)
+#     hIndex_field = sum(1 for i, citation in enumerate(citations) if citation > i)
 
-    cursor.execute(
-        "update authors_field set hIndex_field = %s where authorID = %s",
-        (hIndex_field, authorID)
-    )
-    conn.commit()
-    # print("Process author: ", authorName, " with rank ", str(authorRank))
+#     cursor.execute(
+#         "update authors_field set hIndex_field = %s where authorID = %s",
+#         (hIndex_field, authorID)
+#     )
+#     conn.commit()
+#     # print("Process author: ", authorName, " with rank ", str(authorRank))
 
-cursor.close()
-conn.close()
+# cursor.close()
+# conn.close()

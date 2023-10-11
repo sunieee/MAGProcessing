@@ -213,7 +213,7 @@ timeseries_df = pd.read_sql_query(f"""select citeStartYear, citeEndYear, totalCi
 # 5 other features
 papers_df = pd.read_sql_query(f"""select * from papers_field where paperID in {nodes};""", engine)
 paper_author_df = pd.read_sql_query(f"""select * from paper_author_field where paperID in {nodes};""", engine)
-similarity_df = pd.read_csv('out/similarity_features.csv')
+similarity_df = pd.read_csv(f'out/{database}/similarity_features.csv')
 similarity_df.pop('title')
 similarity_df.pop('abstract')
 similarity_df['paperID'] = similarity_df['paperID'].astype(str)
@@ -230,7 +230,8 @@ df_feature = pd.DataFrame(columns=feature_names)
 # df_feature.index.names = ["citingpaperID", "citedpaperID"]
 
 
-for i in tqdm(range(len(edges))):
+def extract_feature_by_index(i):
+    print(f'extracting feature {i}/{len(edges)}')
     row = edges.iloc[i]
     authorID = row['authorID']
     citing = row['citingpaperID']
@@ -292,7 +293,18 @@ for i in tqdm(range(len(edges))):
         if feature not in dic or dic[feature] is None:
             dic[feature] = np.nan
 
-    df_feature.loc[citing + ' ' + cited + ' ' + authorID] = dic
+    # df_feature.loc[citing + ' ' + cited + ' ' + authorID] = dic
+    return citing + ' ' + cited + ' ' + authorID, dic
+
+
+import multiprocessing
+
+with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+    results = pool.map(extract_feature_by_index, range(len(edges)))
+
+results_dic = dict(results)
+# add all the dictionary to the dataframe df_feature
+df_feature = pd.DataFrame.from_dict(results_dic, orient='index', columns=feature_names)
 
 # 假设df_feature已经有一个MultiIndex
 # 拆分MultiIndex为两个单独的列
@@ -303,7 +315,7 @@ cols = ['citingpaperID', 'citedpaperID', 'authorID'] + [col for col in df_featur
 df_feature = df_feature[cols]
 
 # sleep()
-df_feature.to_csv('out/all_features.csv',index=False)
+df_feature.to_csv(f'out/{database}/all_features.csv',index=False)
 print('all_features.csv saved', len(df_feature))
 print(df_feature.head())
 
