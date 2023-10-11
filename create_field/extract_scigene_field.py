@@ -13,7 +13,7 @@ import concurrent.futures
 from utils import *
 
 engine_MAG = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG', pool_size=20)
-GROUP_SIZE = 100
+GROUP_SIZE = 1000
 
 ####################################################################################
 # extract paperID
