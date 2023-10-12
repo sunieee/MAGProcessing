@@ -17,14 +17,10 @@ for row in tqdm(authors_rows):
     print(f'### ({count}/{len(authors_rows)})', authorID, authorName, rank)
 
     # authorID = "".join(filter(str.isalpha, authorName)).lower() + str(rank)
-
     papers_df = pd.read_sql(f"SELECT * FROM papers_{authorID}", conn)
-    links_df = pd.read_sql(f"SELECT * FROM links_{authorID}", conn)
-
     papers_df.to_csv(f'data/{database}/papers/{authorID}.csv', index=False)
-    links_df.to_csv(f'data/{database}/links/{authorID}.csv', index=False)
 
-    print(f"Dump papers and links for field author {authorName} with rank {rank}: {authorID}")
+    print(f"Dump papers for field author {authorName} with rank {rank}: {authorID}")
 
 cursor.close()
 conn.close()

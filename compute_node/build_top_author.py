@@ -15,7 +15,7 @@ print('[ create mapping time cost: ', time.time()-t, ']')
 
 
 # process each author
-print('## start to process each author (create papers and links)', len(authors_rows))
+print('## start to process each author (create papers)', len(authors_rows))
 count = 0
 for row in tqdm(authors_rows):
     authorID = row[0].strip()
@@ -68,44 +68,6 @@ create index arc_index on papers_{authorID}(paperID);
 
     conn.commit()
     print('[ to_sql time cost: ', time.time()-t, ']')
-    
-    # df.to_csv(f'data/{fieldName}/papers_{authorID}.csv', index=False)
-    print(f"Create and fill papers for field author {authorName}  with rank {rank}: {authorID}")
-    try_execute(f"drop table links_{authorID}")
-
-    #########################################################################
-    # insert potential influence link table for the author
-    # 创建links_xiaofengli1：citingpaperID, citedpaperID, sharedAuthor, extends_prob。其中citingpaperID均来自papers_xiaofengli1
-    # citingpaperID和citedpaperID均属于xiaofengli1，则sharedAuthor=1
-    # 从paper_reference_field_labeled更新extends_prob
-    #########################################################################
-    execute(f"""
-create table links_{authorID} (extends_prob float) 
-    select P.citingpaperID, P.citedpaperID, 0 as sharedAuthor, null as extends_prob 
-    from {database}.paper_reference_field as P 
-    where P.citingpaperID in (select paperID from papers_{authorID}) 
-    group by P.citingpaperID, P.citedpaperID;
-
-create index citing_index on links_{authorID}(citingpaperID);
-create index cited_index on links_{authorID}(citedpaperID);
-
-update links_{authorID} as P, {database}.paper_author_field as A, 
-    {database}.paper_author_field as B set P.sharedAuthor = 1 
-    where A.paperID = P.citingpaperID and B.paperID = P.citedpaperID and A.authorID = B.authorID;
-
-update links_{authorID}, {database}.paper_reference_field_labeled 
-    set links_{authorID}.extends_prob = paper_reference_field_labeled.extends_prob 
-    where links_{authorID}.citingpaperID = paper_reference_field_labeled.citingpaperID 
-    and links_{authorID}.citedpaperID = paper_reference_field_labeled.citedpaperID;
-""")
-    
-    # df = pd.read_sql(f"SELECT * FROM links_{authorID}", conn)
-    # df.to_csv(f'data/{fieldName}/links_{authorID}.csv', index=False)
-    print(f"Create and fill links for field author {authorName} with rank {rank}: {authorID}")
-
-
-
-
 
 
 cursor.close()
