@@ -10,9 +10,11 @@ export database=scigene_visualization_field
 rm -rf out/$database
 mkdir -p out/$database
 
-python compute_similarity_features.py
-python run_extract_features.py
-python compute_proba.py
+python compute_similarity_features.py > out/$database/compute_similarity_features.log
+python run_extract_features.py > out/$database/run_extract_features.log
+python compute_proba.py > out/$database/compute_proba.log
+
+python analysis_distribution.py
 # python tosql.py
 
 # ./run.sh > log/$database/run.log 2>&1 &

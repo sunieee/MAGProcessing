@@ -4,9 +4,9 @@
 
 export database=scigene_visualization_field
 
+rm -rf out/$database
 mkdir -p out/$database
 
-python extract_scigene_field.py
-python extract_citation_timeseries.py
-python update_authors_field.py
+python extract_scigene_field.py > out/$database/extract_scigene_field.log
+python extract_citation_timeseries.py > out/$database/extract_citation_timeseries.log
 # python set_fellow.py $2

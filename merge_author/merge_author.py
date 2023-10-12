@@ -67,10 +67,6 @@ create table authors_field_tmp
 UPDATE authors_field, authors_field_tmp 
 SET authors_field.CitationCount_field = authors_field_tmp.CitationCount_field 
 WHERE authors_field.authorID = authors_field_tmp.authorID;
-
-UPDATE authors_field
-SET authorRank = 0
-WHERE {filterCondition} and authorRank = -1;
 ''')
 
 

@@ -3,44 +3,75 @@ import time
 import pandas as pd
 from tqdm import tqdm
 from utils import *
+import multiprocessing
+import math
+import numpy as np
+import json
 
+''' 等价mysql命令，但是效率更高
+drop table papers_field_citation_timeseries_raw_raw;
+create table papers_field_citation_timeseries_raw_raw select M.paperID, R.citingpaperID, 0 as year from papers_field as M join paper_reference_field as R on M.paperID = R.citedpaperID;
+create index id_index on papers_field_citation_timeseries_raw_raw(paperID);
+create index citingid_index on papers_field_citation_timeseries_raw_raw(citingpaperID);
+create index year_index on papers_field_citation_timeseries_raw_raw(year);
+
+create table MACG_papers_tmpid select citingpaperID as paperID from papers_field_citation_timeseries_raw_raw group by citingpaperID;
+create index id_index on MACG_papers_tmpid(paperID);
+create table MACG_papers_tmp select P.* from MACG.papers as P join MACG_papers_tmpid as D on P.paperID = D.paperID;
+create index id_index on MACG_papers_tmp(paperID);
+
+update papers_field_citation_timeseries_raw_raw as C, MACG_papers_tmp as P set C.year = year(P.PublicationDate) where C.citingpaperID = P.paperID;
+create table papers_field_citation_timeseries_raw select paperID, year, count(*) as cited_cnt from papers_field_citation_timeseries_raw_raw group by paperID, year;
+delete from papers_field_citation_timeseries_raw where year <= 0
+'''
 
 ####################################################################################
 # create timeseries raw
 # 从论文引用和发布日期信息中创建了一个名为papers_field_citation_timeseries_raw的数据表，记录了每篇论文每年的引用次数，同时去除了无效的年份数据。
 ####################################################################################
-# 创建 papers_field_citation_timeseries_raw 表
-print('creating papers_field_citation_timeseries_raw_raw')
-sql = '''
-SELECT M.paperID, R.citingpaperID, 0 as year
-FROM papers_field AS M
-JOIN paper_reference_field AS R ON M.paperID = R.citedpaperID
-'''
-papers_field_citation_timeseries_raw_raw = pd.read_sql_query(sql, conn)
-macg_papers = pd.read_csv(f'out/{database}/papers.csv', usecols=['paperID', 'PublicationDate'], dtype={'paperID': str, 'PublicationDate': str})
-macg_papers['PublicationDate'] = pd.to_datetime(macg_papers['PublicationDate'])
+paper_reference = pd.read_csv(f'out/{database}/paper_reference.csv', dtype={'citingpaperID': str, 'citedpaperID': str})
+paper_reference = paper_reference[['citedpaperID', 'citingpaperID']]
+paper_reference.columns = ['paperID', 'citingpaperID']
 
+paperID_list = paper_reference['paperID'].unique().tolist() + paper_reference['citingpaperID'].unique().tolist()
+paperID_list = list(set(paperID_list))
 
-# 创建 MACG_papers_tmpid 表
-print('creating MACG_papers_tmpid')
-macg_papers_tmpid = papers_field_citation_timeseries_raw_raw['citingpaperID'].drop_duplicates()
+def extract_paper_year(paperID_list):
+    conn = pymysql.connect(host='localhost',
+                            port=3306,
+                            user='root',
+                            password='root',
+                            db=database,
+                            charset='utf8')
+    cursor = conn.cursor()
+    # 使用IN子句一次查询多个paperID
+    macg_papers = pd.read_sql_query(f"""select paperID, year(PublicationDate) as year from MACG.papers 
+                                where paperID in {tuple(paperID_list)}""", engine)
+    _paperID2year = dict(zip(macg_papers['paperID'], macg_papers['year']))
 
-# 创建 MACG_papers_tmp 表
-print('creating MACG_papers_tmp')
-macg_papers_tmp = pd.merge(macg_papers_tmpid, macg_papers, left_on='citingpaperID', right_on='paperID')
+    cursor.close()
+    conn.close()
+    return {k: v for k, v in _paperID2year.items() if v}
 
-# 更新引用时间序列的 year 列
-print('updating year')
-macg_papers_tmp['year'] = macg_papers_tmp['PublicationDate'].dt.year
-papers_field_citation_timeseries_raw_raw['year'] = macg_papers_tmp['year']
+if os.path.exists(f'out/{database}/paperID2year.json'):
+    with open(f'out/{database}/paperID2year.json', 'r') as f:
+        paperID2year = json.load(f)
+else:
+    paperID2year = {}
+    multiproces_num = 20
+    group_size = 1000
+    group_length = math.ceil(len(paperID_list)/group_size)
+    with multiprocessing.Pool(processes=multiproces_num) as pool:
+        results = pool.map(extract_paper_year, [paperID_list[i*group_size:(i+1)*group_size] for i in range(group_length)])
+        for result in results:
+            paperID2year.update(result)
+    print('extract paper year done', len(paperID2year))
+    with open(f'out/{database}/paperID2year.json', 'w') as f:
+        json.dump(paperID2year, f)
 
-# 创建 papers_field_citation_timeseries_raw 表
-print('creating papers_field_citation_timeseries_raw')
-papers_field_citation_timeseries_raw = papers_field_citation_timeseries_raw_raw.groupby(['paperID', 'year']).size().reset_index(name='cited_cnt')
-# 删除年份小于等于 0 的行
-print('deleting rows with year <= 0')
-papers_field_citation_timeseries_raw = papers_field_citation_timeseries_raw[papers_field_citation_timeseries_raw['year'] > 0]
-
+paper_reference['year'] = paper_reference['citingpaperID'].apply(lambda x: paperID2year.get(x, 0))
+paper_reference = paper_reference[paper_reference['year'] > 0].astype({'year': int})
+papers_field_citation_timeseries_raw = paper_reference.groupby(['paperID', 'year']).size().reset_index(name='cited_cnt')
 
 ####################################################################################
 # create timeseries
@@ -57,25 +88,6 @@ citationCountByYear varchar(999),
 PRIMARY KEY (paperID)
 );""")
 conn.commit()
-
-# select all raw paper years
-print('selecting all raw paper years')
-cursor.execute("select paperID, year(PublicationDate) from papers_field")
-rows = cursor.fetchall()
-
-paperYearMap = {}
-
-for row in rows:
-    paperID = str(row[0].strip())
-    try:
-        year = int(row[1])
-    except:
-        # 部分数据 PublicationDate 为空
-        print("year error: ", row[1], ", paper ID: ", paperID)
-        year = 0
-    paperYearMap[paperID] = year
-
-# citationCountMap[paperID][year] = count
 citationCountMap = {}
 
 # process each citation count
@@ -83,10 +95,10 @@ print('processing each citation count')
 MIN_YEAR = 1901
 MAX_YEAR = MAX_CITATION_YEAR = 2022
 
-for index, row in papers_field_citation_timeseries_raw.iterrows():
+for i in tqdm(range(len(papers_field_citation_timeseries_raw))):
+    row = papers_field_citation_timeseries_raw.iloc[i]
     paperID = str(row['paperID'].strip())
     year = int(row['year'])
-    citationCount = int(row['cited_cnt'])
 
     if (year < MIN_YEAR) or (year > MAX_YEAR):
         print("citation year out of range: ", year, ", paper ID: ", paperID)
@@ -94,60 +106,81 @@ for index, row in papers_field_citation_timeseries_raw.iterrows():
 
     if not (paperID in citationCountMap):
         citationCountMap[paperID] = {}
-
-    citationCountMap[paperID][year] = citationCount
+    citationCountMap[paperID][year] = int(row['cited_cnt'])
 
 
 print('inserting into papers_field_citation_timeseries')
-for paperID in tqdm(citationCountMap):
 
-    publicationYear = paperYearMap[paperID]
-    citationYearMap = citationCountMap[paperID]
-    yearList = sorted(citationYearMap.keys())
+def insert_citation_timeseries(paperID_list):
+    conn = pymysql.connect(host='localhost',
+                            port=3306,
+                            user='root',
+                            password='root',
+                            db=database,
+                            charset='utf8')
+    cursor = conn.cursor()
+    for paperID in tqdm(paperID_list):
 
-    if (publicationYear < yearList[0]) and (publicationYear >= MIN_YEAR):
-        yearList.insert(0, publicationYear)
-        citationYearMap[publicationYear] = 0
+        if paperID2year.get(paperID, 0) == 0 or np.isnan(paperID2year[paperID]):
+            print("paper year not valid: ", paperID, paperID2year.get(paperID, 0))
+            continue
 
-    if not (MAX_CITATION_YEAR in yearList):
-        yearList.append(MAX_CITATION_YEAR)
-        citationYearMap[MAX_CITATION_YEAR] = 0
+        publicationYear = paperID2year[paperID]
+        citationYearMap = citationCountMap[paperID]
+        yearList = sorted(citationYearMap.keys())
 
-    citeStartYear = yearList[0]
-    citeEndYear = yearList[len(yearList) - 1]
+        if (publicationYear < yearList[0]) and (publicationYear >= MIN_YEAR):
+            yearList.insert(0, publicationYear)
+            citationYearMap[publicationYear] = 0
 
-    totalCitationCount = citationYearMap[yearList[0]]
-    citationCountByYear = str(citationYearMap[yearList[0]])
+        if not (MAX_CITATION_YEAR in yearList):
+            yearList.append(MAX_CITATION_YEAR)
+            citationYearMap[MAX_CITATION_YEAR] = 0
 
-    last_year = yearList[0]
-    current_year = -1
+        citeStartYear = yearList[0]
+        citeEndYear = yearList[len(yearList) - 1]
 
-    for index in range(1, len(yearList)):
+        totalCitationCount = citationYearMap[yearList[0]]
+        citationCountByYear = str(citationYearMap[yearList[0]])
 
-        current_year = yearList[index]
-        totalCitationCount += citationYearMap[current_year]
+        last_year = yearList[0]
+        current_year = -1
 
-        if current_year > (last_year + 1):
-            citationCountByYear += ",0" * (current_year - last_year - 1)
+        for index in range(1, len(yearList)):
 
-        citationCountByYear += "," + str(citationYearMap[current_year])
+            current_year = yearList[index]
+            totalCitationCount += citationYearMap[current_year]
 
-        last_year = current_year
+            if current_year > (last_year + 1):
+                citationCountByYear += ",0" * int(current_year - last_year - 1)
 
-    values = (paperID, publicationYear, citeStartYear, citeEndYear, totalCitationCount, citationCountByYear)
-    cursor.execute(
-        "insert into papers_field_citation_timeseries values(%s, %s, %s, %s, %s, %s)",
-        values
-    )
+            citationCountByYear += "," + str(citationYearMap[current_year])
+            last_year = current_year
 
-conn.commit()
+        values = (paperID, publicationYear, citeStartYear, citeEndYear, totalCitationCount, citationCountByYear)
+        cursor.execute(
+            "insert into papers_field_citation_timeseries values(%s, %s, %s, %s, %s, %s)",
+            values
+        )
 
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+multiproces_num = 20
+group_size = 10000
+paperID_list = list(citationCountMap.keys())
+group_length = math.ceil(len(paperID_list)/group_size)
+with multiprocessing.Pool(processes=multiproces_num) as pool:
+    results = pool.map(insert_citation_timeseries, [paperID_list[i*group_size:(i+1)*group_size] for i in range(group_length)])
 
 ####################################################################################
 # update papers_field
 # 将论文表中的年份更新为发布日期的年份，为年份添加索引，然后从papers_field_citation_timeseries表复制引用次数序列数据到新的列中。
 ####################################################################################
 print('updating papers_field')
+try_execute("ALTER TABLE papers_field DROP COLUMN citationCountByYear;")
+
 cursor.execute("SHOW COLUMNS FROM papers_field LIKE 'year'")
 if cursor.fetchone() is None:
     cursor.execute("ALTER TABLE papers_field ADD year INT")
@@ -160,3 +193,64 @@ alter table papers_field add index(year);
 ALTER TABLE papers_field ADD citationCountByYear varchar(999);
 update papers_field as PA, papers_field_citation_timeseries as PM set PA.citationCountByYear = PM.citationCountByYear where PA.paperID = PM.paperID;
 ''')
+
+
+#######################################################################
+# update authors_field
+# 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息，添加 h-index 信息，创建名为 paper_reference_field_labeled 的表，添加名为 FellowType 列
+#######################################################################
+print('updating authors_field')
+
+try_execute("drop table paper_reference_field_labeled;")
+try_execute("drop table authors_field_tmp;")
+try_execute("ALTER TABLE authors_field DROP COLUMN PaperCount_field;")
+try_execute("ALTER TABLE authors_field DROP COLUMN authorRank;")
+try_execute("ALTER TABLE authors_field DROP COLUMN CitationCount_field;")
+try_execute("ALTER TABLE authors_field DROP COLUMN hIndex_field;")
+try_execute("ALTER TABLE authors_field DROP COLUMN FellowType;")
+
+
+execute('''
+create table authors_field_tmp select tmp.*, @curRank := @curRank + 1 AS authorRank 
+    from (select authorID, count(*) as PaperCount_field 
+        from paper_author_field 
+        group by authorID 
+        order by PaperCount_field desc) 
+    as tmp, (SELECT @curRank := 0) r;
+        
+create index author_index on authors_field_tmp(authorID);
+ALTER TABLE authors_field ADD PaperCount_field INT;
+ALTER TABLE authors_field ADD authorRank INT;
+update authors_field, authors_field_tmp 
+    set authors_field.PaperCount_field = authors_field_tmp.PaperCount_field, 
+        authors_field.authorRank = authors_field_tmp.authorRank 
+        where authors_field.authorID = authors_field_tmp.authorID;
+
+alter table authors_field add index(authorRank);
+drop table authors_field_tmp;
+
+create table authors_field_tmp 
+    select sum(P.citationCount) as CitationCount_field,  authorID 
+    from papers_field as P join paper_author_field as PA on P.paperID = PA.paperID and P.CitationCount >=0 group by authorID;
+create index id_index on authors_field_tmp(authorID);
+ALTER TABLE authors_field ADD CitationCount_field INT;
+update authors_field, authors_field_tmp 
+    set authors_field.CitationCount_field = authors_field_tmp.CitationCount_field 
+    where authors_field.authorID = authors_field_tmp.authorID;
+drop table authors_field_tmp;
+
+ALTER TABLE authors_field ADD hIndex_field INT;
+create table paper_reference_field_labeled(
+citingpaperID varchar(15),
+citedpaperID varchar(15),
+extends_prob double
+);
+''')
+
+# ALTER TABLE authors_field ADD FellowType varchar(999);
+# update authors_field as af, scigene_acl_anthology.fellow as f 
+#     set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
+
+
+cursor.close()
+conn.close()

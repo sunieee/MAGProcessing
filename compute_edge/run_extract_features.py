@@ -209,10 +209,15 @@ def get_values_from_index(df, index, column_name):
 timeseries_df = pd.read_sql_query(f"""select citeStartYear, citeEndYear, totalCitationCount, citationCountByYear, paperID 
                                   from {citation_timeseries_table}
                                   where paperID in {nodes}""", engine)
+timeseries_df['paperID'] = timeseries_df['paperID'].astype(str)
 
 # 5 other features
 papers_df = pd.read_sql_query(f"""select * from papers_field where paperID in {nodes};""", engine)
+papers_df['paperID'] = papers_df['paperID'].astype(str)
+
 paper_author_df = pd.read_sql_query(f"""select * from paper_author_field where paperID in {nodes};""", engine)
+paper_author_df['paperID'] = paper_author_df['paperID'].astype(str)
+
 similarity_df = pd.read_csv(f'out/{database}/similarity_features.csv')
 similarity_df.pop('title')
 similarity_df.pop('abstract')
