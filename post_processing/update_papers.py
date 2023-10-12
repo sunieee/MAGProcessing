@@ -42,6 +42,34 @@ def extract_paper_authors(pairs):
     return _paperID2authorsName
 
 
+def extract_paper_abstract(pairs):
+    papers, info = pairs
+    print('extract_paper_abstract', len(papers), info)
+    conn = pymysql.connect(host='localhost',
+                            port=3306,
+                            user='root',
+                            password='root',
+                            db=database,
+                            charset='utf8')
+    cursor = conn.cursor()
+    _paperID2abstract = defaultdict(str)
+
+    # 使用IN子句一次查询多个paperID
+    paper_ids_str = ', '.join(map(str, papers))
+    cursor.execute(f"""SELECT paperID, abstract
+                       FROM papers_field 
+                       WHERE paperID IN ({paper_ids_str})
+                       ORDER BY paperID;""")
+    result = cursor.fetchall()
+
+    # 使用Python代码来组合结果
+    for paperID, abstract in result:
+        _paperID2abstract[paperID] = abstract
+
+    cursor.close()
+    conn.close()
+    return _paperID2abstract
+
 def extract_paper_venu(papers):
     conn = pymysql.connect(host='localhost',
                             port=3306,
@@ -73,6 +101,7 @@ def extract_paper_venu(papers):
 
 paperID2venue = defaultdict(str)
 paperID2authorsName = defaultdict(str)
+paperID2abstract = defaultdict(str)
 
 paperID_list = []
 for file in tqdm(file_list):
@@ -94,7 +123,14 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_authors, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
     for result in results:
         paperID2authorsName.update(result)
-print(paperID2authorsName)
+print('finish extract_paper_authors', len(paperID2authorsName))
+print(paperID2abstract)
+
+with multiprocessing.Pool(processes=multiproces_num) as pool:
+    results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
+    for result in results:
+        paperID2abstract.update(result)
+print('finish extract_paper_abstract', len(paperID2abstract))
 
 def extract_paper(file):
     filepath = os.path.join(paper_dir, file)
@@ -103,6 +139,7 @@ def extract_paper(file):
     papers['paperID'] = papers['paperID'].astype(str)
     papers['venu'] = papers['paperID'].apply(lambda paperID: paperID2venue[paperID])
     papers['authorsName'] = papers['paperID'].apply(lambda paperID: paperID2authorsName[paperID])
+    papers['abstract'] = papers['paperID'].apply(lambda paperID: paperID2abstract[paperID])
 
     papers.to_csv(filepath.replace('papers', 'new_papers'), index=False)
 

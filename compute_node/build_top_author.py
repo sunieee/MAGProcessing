@@ -35,7 +35,8 @@ for row in tqdm(authors_rows):
     execute(f"""
 create table papers_{authorID} (firstAuthorID varchar(15), firstAuthorName varchar(999), isKeyPaper float) 
     select papers_field.paperID, title, year, referenceCount, citationCount, min(authorOrder) as authorOrder, 
-    0 as isKeyPaper, '' as firstAuthorID, '' as firstAuthorName from {database}.paper_author_field, 
+    0 as isKeyPaper, '' as firstAuthorID, '' as firstAuthorName 
+    from {database}.paper_author_field, 
     {database}.papers_field where authorID = '{authorID}' and papers_field.paperID = paper_author_field.paperID 
     group by papers_field.paperID, title, year;
             
