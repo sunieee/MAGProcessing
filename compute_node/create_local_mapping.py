@@ -116,14 +116,14 @@ for authorID, year, count in rows:
     yearCountMap[year] = yearCountMap.get(year, 0) + count
 
 
-# save all the maps to data/{database}/map/*.json
-with open(f"data/{database}/map/firstAuthorPaperCountMap.json", "w") as f:
+# save all the maps to out/{database}/map/*.json
+with open(f"out/{database}/map/firstAuthorPaperCountMap.json", "w") as f:
     json.dump(firstAuthorPaperCountMap, f)
-with open(f"data/{database}/map/firstAuthorWeightedPaperCountMap.json", "w") as f:
+with open(f"out/{database}/map/firstAuthorWeightedPaperCountMap.json", "w") as f:
     json.dump(firstAuthorWeightedPaperCountMap, f)
-with open(f"data/{database}/map/coAuthorWeightedPaperCountMap.json", "w") as f:
+with open(f"out/{database}/map/coAuthorWeightedPaperCountMap.json", "w") as f:
     json.dump(coAuthorWeightedPaperCountMap, f)
-with open(f"data/{database}/map/coAuthorPaperCountMap.json", "w") as f:
+with open(f"out/{database}/map/coAuthorPaperCountMap.json", "w") as f:
     json.dump(coAuthorPaperCountMap, f)
-with open(f"data/{database}/map/topAuthorPaperCountMap.json", "w") as f:
+with open(f"out/{database}/map/topAuthorPaperCountMap.json", "w") as f:
     json.dump(topAuthorPaperCountMap, f)

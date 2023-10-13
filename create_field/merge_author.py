@@ -1,5 +1,6 @@
 import pandas as pd
 from utils import *
+from tqdm import tqdm
 
 match_df = pd.read_csv(f'out/{database}/filtered.csv', index_col=0)
 
@@ -76,10 +77,14 @@ WHERE authors_field.authorID = authors_field_tmp.authorID;
 # 以反映其影响力和论文引用分布情况。
 #######################################################################
 # process each author
-for authorID in authorID_list:
-    rows = executeFetch(f"""select P.CitationCount from papers_field as P 
+filterCondition = "PaperCount_field > 10"
+authorID_list = pd.read_sql(f"SELECT authorID FROM authors_field WHERE {filterCondition}", conn)['authorID'].tolist()
+
+for authorID in tqdm(authorID_list):
+    cursor.execute(f"""select P.CitationCount from papers_field as P 
                    join paper_author_field as PA 
                    on PA.authorID = '{authorID}' and P.paperID = PA.paperID;""")
+    rows = cursor.fetchall()
     citations = [int(citation_row[0]) for citation_row in rows]
     citations.sort(reverse=True)
     hIndex_field = sum(1 for i, citation in enumerate(citations) if citation > i)

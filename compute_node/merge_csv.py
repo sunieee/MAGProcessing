@@ -19,7 +19,7 @@ for i in list(match_df.index)[::-1]:
     print('=' * 20)
     print(f'merging authors: {name1}({id2}) -> {name2}({id1})')
 
-    link_path = f'data/csv/{fieldName}/links_{authorTableName}.csv'
+    link_path = f'out/csv/{fieldName}/links_{authorTableName}.csv'
     links_df = pd.read_csv(link_path)
     prob_df1 = pd.read_csv(os.path.join(prob_dir, f'links_{r1}.csv'))
     prob_df2 = pd.read_csv(os.path.join(prob_dir, f'links_{r2}.csv'))

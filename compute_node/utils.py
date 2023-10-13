@@ -6,25 +6,21 @@ import os
 from tqdm import tqdm
 import math
 import json
+import multiprocessing
 
-
-# 多进程下序号
-if len(sys.argv) <= 1:
-    order = '1/1'
-else:
-    order = sys.argv[1]
-
-print('multiprocessing order:', order)
 
 database = os.environ.get('database', 'scigene_visualization_field')
 database_pcg = database + "_pcg"
 # numOfTopAuthors = os.environ.get('numOfTopAuthors', 1100)
 # numOfTopAuthors = int(numOfTopAuthors)
 
+multiproces_num = 20
 filterCondition = f"PaperCount_field > 10"
+# select exact top field authors
+
 
 # 对于 authorID 的限制
-# with open('data/test.txt', 'r') as f:
+# with open('out/test.txt', 'r') as f:
 #     authorID_list = f.read().split()
 # authorID_list = ['2147343253', '2076420186', '2122885999', 
 #                  '2003408012', '2762167099', '2158935544']
@@ -74,7 +70,7 @@ engine = create_engine(f"mysql+pymysql://root:root@192.168.0.140:3306/{database_
 # 这是为了方便用户从各种数据库中读取数据。
 
 
-def execute(sql):
+def execute(sql, cursor=cursor):
     for _sql in sql.split(';'):
         _sql = _sql.strip()
         if _sql == '':
@@ -86,7 +82,7 @@ def execute(sql):
         print('[time cost: ', time.time()-t, ']')
 
 
-def executeFetch(sql):
+def executeFetch(sql, cursor=cursor):
     sql = sql.strip()
     print('* executeFetch', sql)
     t = time.time()
@@ -95,22 +91,18 @@ def executeFetch(sql):
     print('[time cost: ', time.time()-t, ']')
     return rows
 
-def try_execute(sql):
+
+authors_rows = executeFetch(f"""
+select authorID, name, authorRank, PaperCount_field 
+    from {database}.authors_field
+    where {filterCondition} order by authorID;""")
+authorID_list = [row[0] for row in authors_rows]
+
+
+def try_execute(sql, cursor=cursor):
     try:
         cursor.execute(sql)
     except:
         pass
     conn.commit()
 
-# select exact top field authors
-authors_rows = executeFetch(f"""
-select authorID, name, authorRank, PaperCount_field 
-    from {database}.authors_field
-    where {filterCondition} order by authorID;""")
-
-o1, o2 = order.split('/')
-o1, o2 = int(o1), int(o2)
-length = math.ceil(len(authors_rows) / o2)
-authors_rows = authors_rows[(o1-1) * length: o1 * length]
-
-print('# process range:', (o1-1) * length, o1 * length, 'length:', len(authors_rows))

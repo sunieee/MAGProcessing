@@ -2,7 +2,7 @@ import os
 import json
 import io
 
-data_dir = "../data/annotated-json-data/"
+data_dir = "../out/annotated-json-out/"
 def main():
     files_to_process = []
     for fname in os.listdir(data_dir):

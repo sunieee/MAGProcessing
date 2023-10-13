@@ -4,8 +4,8 @@ from utils import *
 
 
 field = os.environ.get('field', 'visualization')
-edge_df = pd.read_csv(f'data/{field}/edge_proba.csv')
-node_dir = f'data/{field}'
+edge_df = pd.read_csv(f'out/{field}/edge_proba.csv')
+node_dir = f'out/{field}'
 
 df = pd.read_csv("links_jianchen0.csv", sep=',')
 paper = pd.read_csv("0.csv", sep=',', index_col=0)

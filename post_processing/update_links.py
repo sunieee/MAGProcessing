@@ -33,9 +33,9 @@ def fetch_citation_context(pairs):
     return dic
         
 
-if os.path.exists(f'data/{database}/citation_context.json'):
+if os.path.exists(f'out/{database}/citation_context.json'):
     print('loading citation context...')
-    with open(f'data/{database}/citation_context.json', 'r') as f:
+    with open(f'out/{database}/citation_context.json', 'r') as f:
         citation2context = json.load(f)
 else:
     print('extracting citation context...')
@@ -55,7 +55,7 @@ else:
     #                                 where citingpaperID in {citingpaperID_list}
     #                                 and citedpaperID in {citedpaperID_list}""", conn)
     print('time cost:', time.time()-t)
-    with open(f'data/{database}/citation_context.json', 'w') as f:
+    with open(f'out/{database}/citation_context.json', 'w') as f:
         json.dump(citation2context, f)
 
 def extract_citation_context(authorID):
@@ -65,7 +65,7 @@ def extract_citation_context(authorID):
     df = df[['citingpaperID', 'citedpaperID', 'proba']]
     df.columns = ['childrenID', 'parentID', 'extendsProb']
     df['citationContext'] = df.apply(lambda row: citation2context.get(row['childrenID'] + ',' + row['parentID']), axis=1)
-    df.to_csv(f'data/{database}/links/{authorID}.csv', index=False)
+    df.to_csv(f'out/{database}/links/{authorID}.csv', index=False)
 
 with multiprocessing.Pool(processes=20) as pool:
     pool.map(extract_citation_context, authorID_list)

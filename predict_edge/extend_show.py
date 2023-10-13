@@ -7,7 +7,7 @@ import json
 def main():
     root_path = str(sys.argv[0])
     new_file = open('../previous_people_dataset.csv','w')
-    path = root_path.rsplit('/', 1)[0]+'/annotated-json-data/'
+    path = root_path.rsplit('/', 1)[0]+'/annotated-json-out/'
     json_list = os.listdir(path)
     for file in json_list:
         file_path = os.path.join(path,file)
