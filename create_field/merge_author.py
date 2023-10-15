@@ -35,7 +35,6 @@ filterCondition = f"authorID IN ({', '.join(map(str, authorID_list))})"
 #######################################################################
 # update authors_field (局部更新用户信息)
 # 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息
-# 添加 h-index 信息，创建名为 paper_reference_field_labeled 的表，添加名为 FellowType 列
 #######################################################################
 print('updating authors_field')
 try:
@@ -44,30 +43,24 @@ except:
     pass
 
 execute(f'''
-CREATE TABLE authors_field_tmp 
-SELECT authorID, COUNT(*) as PaperCount_field 
-FROM paper_author_field 
-WHERE {filterCondition}
-GROUP BY authorID 
-ORDER BY PaperCount_field DESC;
-        
-UPDATE authors_field, authors_field_tmp 
-SET authors_field.PaperCount_field = authors_field_tmp.PaperCount_field
-WHERE authors_field.authorID = authors_field_tmp.authorID;
+UPDATE authors_field af
+JOIN (
+    SELECT authorID, COUNT(*) as count_papers
+    FROM paper_author_field 
+    WHERE {filterCondition}
+    GROUP BY authorID
+) tmp ON af.authorID = tmp.authorID
+SET af.PaperCount_field = tmp.count_papers;
 
-drop table authors_field_tmp;
-
-create table authors_field_tmp
-    select sum(P.citationCount) as CitationCount_field, authorID 
-    from papers_field as P 
-        join paper_author_field as PA 
-        on P.paperID = PA.paperID and P.CitationCount >=0 
-        where PA.{filterCondition}
-    group by authorID;
-
-UPDATE authors_field, authors_field_tmp 
-SET authors_field.CitationCount_field = authors_field_tmp.CitationCount_field 
-WHERE authors_field.authorID = authors_field_tmp.authorID;
+UPDATE authors_field af
+JOIN (
+    SELECT PA.authorID, SUM(P.citationCount) as total_citations
+    FROM papers_field as P 
+    JOIN paper_author_field as PA on P.paperID = PA.paperID 
+    WHERE P.CitationCount >= 0 AND PA.{filterCondition}
+    GROUP BY PA.authorID
+) tmp ON af.authorID = tmp.authorID
+SET af.CitationCount_field = tmp.total_citations;
 ''')
 
 
@@ -77,7 +70,7 @@ WHERE authors_field.authorID = authors_field_tmp.authorID;
 # 以反映其影响力和论文引用分布情况。
 #######################################################################
 # process each author
-filterCondition = "PaperCount_field > 10"
+filterCondition = "PaperCount_field > 20"
 authorID_list = pd.read_sql(f"SELECT authorID FROM authors_field WHERE {filterCondition}", conn)['authorID'].tolist()
 
 for authorID in tqdm(authorID_list):

@@ -5,8 +5,8 @@
 # export database=scigene_visualization_field
 export database=scigene_database_field
 
-rm -rf out/$database
-mkdir -p out/$database
+# rm -rf out/$database
+# mkdir -p out/$database
 
 python extract_scigene_field.py > out/$database/extract_scigene_field.log
 python extract_citation_timeseries.py > out/$database/extract_citation_timeseries.log

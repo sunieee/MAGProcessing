@@ -10,7 +10,7 @@ import time
 import sqlalchemy
 import concurrent.futures
 import multiprocessing
-
+import datetime
 from utils import *
 
 engine_MAG = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG', pool_size=20)
@@ -22,88 +22,89 @@ multiproces_num = 20
 # 根据领域名称查询fieldID，如： select * from field_of_study where name='Database';
 ####################################################################################
 
-
-
 def get_paperID_batch(pair):
-    fieldID, offset, verbose = pair
+    fieldID, offset, ix, pbar, verbose = pair
     engine = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG')
     sql_data = f'select paperID from papers_field where fieldID=\'{fieldID}\' LIMIT {GROUP_SIZE} OFFSET {offset};'
-    if verbose:
-        print('* ' + sql_data)
+    # if verbose:
+    #     time = datetime.datetime.now().strftime('%H:%M:%S')
+    #     print(f'* {time} ' + sql_data)
     db_data_single = pd.read_sql_query(sql_data, engine)['paperID'].tolist()
     engine.dispose()
+    if verbose:
+        pbar.n = int(ix)
+        pbar.refresh()
     return db_data_single
 
 
-def worker(task_queue, result_queue):
-    while True:
-        task = task_queue.get()
-        # 这里，你可以运行你的函数，如 get_paperID_batch
-        result = get_paperID_batch(task)
-        if len(result):
-            result_queue.put(result)
-        else:
-            break
-
-
+paper_count_df = pd.DataFrame(columns=['type', 'ID', 'paperCount', 'accumulateCount'])
 def read_papers(fields, verbose=True):
     paper_ids = set()
-    for fieldID in tqdm(set(fields)):
-        # 使用分页查询（也叫做分块查询）来获取所有的paperID
-        offset = 0
-        finish = False
+    for fieldID in tqdm(fields):
+        cursor.execute(f"SELECT paperCount FROM MACG.field_of_study where fieldID='{fieldID}'")
+        result = cursor.fetchone()
+
+        group_num = result[0] // GROUP_SIZE + 5
+        pbar = tqdm(total=group_num)
+        print(f'filedID: {fieldID}, paperCount: {result[0]}, group_num: {group_num}')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num) as executor:
+            results = executor.map(get_paperID_batch, [(fieldID, i*GROUP_SIZE, i, pbar, verbose) for i in range(group_num)])
+        
+        # 将所有结果合并
         db_data_single = set()
-        while not finish:
-            with multiprocessing.Pool(processes=multiproces_num) as pool:
-                results = pool.map(get_paperID_batch, [(fieldID, offset+i*GROUP_SIZE, verbose) for i in range(multiproces_num)])
-                for result in results:
-                    db_data_single.update(result)
-                    if len(result) == 0:
-                        finish = True
-            offset += multiproces_num * GROUP_SIZE
+        for result in tqdm(results):
+            db_data_single.update(result)
+
         paper_ids.update(db_data_single)
+        paper_count_df.loc[len(paper_count_df)] = ['field', fieldID, len(db_data_single), len(paper_ids)]
         if verbose:
             print(f'finish reading paperID on field {fieldID}, single: {len(db_data_single)}, all: {len(paper_ids)}')
     return paper_ids
 
-db_data = read_papers(field_info['fieldID'])
-print(f'## finish reading paperID on fieldID:', len(db_data))
+paper_path = f'out/{database}/papers.txt'
+if os.path.exists(paper_path):
+    # read MAG paperID list from txt file: MAG_field.txt
+    papers = list(np.loadtxt(paper_path, dtype=str))
+    print(f'# {paper_path} exists, reading MAG list from txt file', len(papers))
+else:
+    db_data = read_papers(field_info['fieldID'])
+    print(f'## finish reading paperID on fieldID:', len(db_data))
 
-for fieldID in set(field_info.get('children', [])):
-    sql_data = f'select childrenID FROM field_children where parentID=\'{fieldID}\';'
-    children_fields = pd.read_sql_query(sql_data, engine_MAG).values.ravel().tolist()
-    print('*', sql_data, len(children_fields))
-    db_data_single = read_papers(children_fields, verbose=False)
-    db_data.update(db_data_single)
-    print(f'finish reading paperID on children of {fieldID}, single: {len(db_data_single)}, all: {len(db_data)}')
-print(f'## finish reading paperID on children:', len(db_data))
+    for fieldID in field_info.get('children', []):
+        sql_data = f'select childrenID FROM field_children where parentID=\'{fieldID}\';'
+        children_fields = pd.read_sql_query(sql_data, engine_MAG).values.ravel().tolist()
+        print('*', sql_data, len(children_fields))
+        db_data_single = read_papers(children_fields, verbose=False)
+        db_data.update(db_data_single)
+        print(f'finish reading paperID on children of {fieldID}, single: {len(db_data_single)}, all: {len(db_data)}')
+    print(f'## finish reading paperID on children:', len(db_data))
 
-for journalID in tqdm(set(field_info.get('JournalID', []))):
-    sql_data = f'select paperID from papers where JournalID=\'{journalID}\';'
-    print('*', sql_data)
-    db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
-    db_data.update(db_data_single)
-    print(f'finish reading paperID on Journal {journalID}, single: {len(db_data_single)}, all: {len(db_data)}')
-print(f'## finish reading paperID on Journal:', len(db_data))
+    for journalID in tqdm(field_info.get('JournalID', [])):
+        sql_data = f'select paperID from papers where JournalID=\'{journalID}\';'
+        print('*', sql_data)
+        db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
+        db_data.update(db_data_single)
+        paper_count_df.loc[len(paper_count_df)] = ['journal', journalID, len(db_data_single), len(db_data)]
+        print(f'finish reading paperID on Journal {journalID}, single: {len(db_data_single)}, all: {len(db_data)}')
+    print(f'## finish reading paperID on Journal:', len(db_data))
 
-for conferenceID in tqdm(set(field_info.get('ConferenceID', []))):
-    sql_data = f'select paperID from papers where ConferenceID=\'{conferenceID}\';'
-    print('*', sql_data)
-    db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
-    db_data.update(db_data_single)
-    print(f'finish reading paperID on Conference {conferenceID}, single: {len(db_data_single)}, all: {len(db_data)}')
-print(f'## finish reading paperID on Conference:', len(db_data))
+    for conferenceID in tqdm(field_info.get('ConferenceID', [])):
+        sql_data = f'select paperID from papers where ConferenceID=\'{conferenceID}\';'
+        print('*', sql_data)
+        db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
+        db_data.update(db_data_single)
+        paper_count_df.loc[len(paper_count_df)] = ['conference', conferenceID, len(db_data_single), len(db_data)]
+        print(f'finish reading paperID on Conference {conferenceID}, single: {len(db_data_single)}, all: {len(db_data)}')
+    print(f'## finish reading paperID on Conference:', len(db_data))
 
-papers = list(db_data)
-print('# finish reading MAG list from sql, saving to txt', len(papers))
+    papers = list(db_data)
+    print('# finish reading MAG list from sql, saving to txt', len(papers))
 
-# save list(MAG) to a txt file
-np.savetxt(f'out/{database}/papers.txt', papers, fmt='%s')
-print('# finish saving MAG list to txt file')
+    # save list(MAG) to a txt file
+    np.savetxt(f'out/{database}/papers.txt', papers, fmt='%s')
+    print('# finish saving MAG list to txt file')
 
-# read MAG paperID list from txt file: MAG_field.txt
-papers = list(np.loadtxt(f'out/{database}/papers.txt', dtype=str))
-print('# finish reading MAG list from txt file', len(papers))
+    paper_count_df.to_csv(f'out/{database}/paper_count.csv', index=False)
 
 
 ####################################################################################
@@ -136,102 +137,144 @@ def get_data_from_table_concurrent(table_name, key='paperID', data=papers):
     print(f'# Getting {table_name}({key}) from MAG')
     t = time.time()
     db = pd.DataFrame()
-    query_params = [data[i:i+GROUP_SIZE] for i in range(0, len(data), GROUP_SIZE)]
 
-    def _query(MAG_group):
+    def _query(pair):
+        MAG_group, index, pbar = pair
+        engine = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG')
         sql=f'''select * from {table_name} where '''\
               + key + ' in ('+','.join([f'\'{x}\'' for x in MAG_group])+')'
-        # print(f"Executing query for param {index+1}/{len(query_params)}")
-        return pd.read_sql_query(sql, engine_MAG)
+        # time = datetime.datetime.now().strftime('%H:%M:%S')
+        # print(f"* {time} Executing query for param {index+1}/{len(query_params)} in {table_name}({key})")
+        ret = pd.read_sql_query(sql, engine)
+        engine.dispose()
+
+        pbar.n = int(index)
+        pbar.refresh()
+        return ret
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        results = tqdm(executor.map(_query, query_params), total=len(query_params))
+    group_num = len(range(0, len(data), GROUP_SIZE))
+    pbar = tqdm(total=group_num)
+    params = [(data[i*GROUP_SIZE:(i+1)*GROUP_SIZE], i, pbar) for i in range(group_num)]
+    print(f'## create params in {table_name}({key}), length: {group_num}')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num * 5) as executor:
+        results = executor.map(_query, params)
 
     # 将所有结果合并
-    for result in results:
-        db=pd.concat([db,result])
+    # for i in tqdm(range(len(results))):
+    #     db=pd.concat([db, results[i]])
+    st = time.time()
+    db = pd.concat(results)
+    print(f'## finish reading {table_name}({key}), merge time cost: {time.time()-st}')
 
     print(f'{table_name}({key}) original', db.shape)
     db=db.drop_duplicates()
-    print(f'{table_name}({key}) drop_duplicates', db.shape)
-
-    print(f'{table_name}({key}) time cost: {time.time()-t}')
+    print(f'{table_name}({key}) drop_duplicates', db.shape, f'time cost: {time.time()-t}')
     return db
 
 
-try:
-    get_data_from_table_concurrent('papers').to_csv(f'out/{database}/papers.csv',index=False)
-except KeyboardInterrupt:
-    pass
+# print('# getting papers from MAG', datetime.datetime.now().strftime('%H:%M:%S'))
+# papers_df = get_data_from_table_concurrent('papers')
+# papers_df.to_csv(f'out/{database}/papers.csv',index=False)
 
-try:
-    get_data_from_table_concurrent('paper_author').to_csv(f'out/{database}/paper_author.csv',index=False)
-except KeyboardInterrupt:
-    pass
+# get_data_from_table_concurrent('paper_author').to_csv(f'out/{database}/paper_author.csv',index=False)
 
-try:
-    citing_db = get_data_from_table_concurrent('paper_reference', key='citingpaperID')
-except KeyboardInterrupt:
-    pass
+# citing_db = get_data_from_table_concurrent('paper_reference', key='citingpaperID')
+# cited_db = get_data_from_table_concurrent('paper_reference', key='citedpaperID')
+# db = pd.concat([citing_db, cited_db])
+# print('paper_reference original', db.shape)
+# db=db.drop_duplicates()
+# print('paper_reference drop_duplicates', db.shape)
+# db.to_csv(f'out/{database}/paper_reference.csv',index=False)
 
-try:
-    cited_db = get_data_from_table_concurrent('paper_reference', key='citedpaperID')
-    db = pd.concat([citing_db, cited_db])
-    print('paper_reference original', db.shape)
-    db=db.drop_duplicates()
-    print('paper_reference drop_duplicates', db.shape)
-    db.to_csv(f'out/{database}/paper_reference.csv',index=False)
-except KeyboardInterrupt:
-    pass
+# paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
+# authors=paper_author_MAG['authorID'].drop_duplicates().values
+# get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/{database}/authors.csv',index=False)
 
-paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
-authors=paper_author_MAG['authorID'].drop_duplicates().values
-get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/{database}/authors.csv',index=False)
 
+papers_df = pd.read_csv(f'out/{database}/papers.csv')
+
+print('## extract paper abstract', datetime.datetime.now().strftime('%H:%M:%S'))
+def extract_paper_abstract(pairs):
+    papers, ix, pbar = pairs
+    # print('extract_paper_abstract', len(papers), info)
+    conn = pymysql.connect(host='localhost', port=3306, user='root', password='root', db='MACG', charset='utf8')
+    cursor = conn.cursor()
+    _paperID2abstract = defaultdict(str)
+
+    # 使用IN子句一次查询多个paperID
+    paper_ids_str = ', '.join(map(str, papers))
+    cursor.execute(f"""SELECT paperID, abstract
+                       FROM abstracts
+                       WHERE paperID IN ({paper_ids_str})
+                       ORDER BY paperID;""")
+    result = cursor.fetchall()
+
+    # 使用Python代码来组合结果
+    for paperID, abstract in result:
+        _paperID2abstract[paperID] = abstract
+
+    cursor.close()
+    conn.close()
+    pbar.n = int(ix)
+    pbar.refresh()
+    return _paperID2abstract
+
+from collections import defaultdict
+paperID2abstract = defaultdict(str)
+group_length = len(papers) // GROUP_SIZE + 1
+pbar = tqdm(total=group_length)
+with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num * 5) as executor:
+    results = executor.map(extract_paper_abstract, [(papers[i*GROUP_SIZE:(i+1)*GROUP_SIZE], i, pbar) for i in range(group_length)])
+    for result in results:
+        paperID2abstract.update(result)
+print('finish extract_paper_abstract', len(paperID2abstract))
+papers_df['abstract'] = papers_df['paperID'].map(paperID2abstract)
+papers_df.to_csv(f'out/{database}/papers.csv',index=False)
+
+print(df_papers_MAG)
+print(df_papers_MAG.shape)
+df_papers_MAG.to_sql('papers_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=100),\
+    "title": sqlalchemy.types.NVARCHAR(length=2000),"ConferenceID": sqlalchemy.types.NVARCHAR(length=15),"JournalID": sqlalchemy.types.NVARCHAR(length=15),\
+        "rank":sqlalchemy.types.INTEGER(),"referenceCount":sqlalchemy.types.INTEGER(),"citationCount":sqlalchemy.types.INTEGER(),"PublicationDate":sqlalchemy.types.Date(), "abstract": sqlalchemy.types.NVARCHAR(length=9999)})
+
+os._exit(0)
 
 
 ####################################################################################
 # to_sql
 # 读取四个子表，并上传到mysql。创建表后添加领域子表的mysql索引（例如在scigene_database_field库）
 ####################################################################################
+print('## uploading papers', datetime.datetime.now().strftime('%H:%M:%S'))
 df_papers_MAG = pd.read_csv(f'out/{database}/papers.csv')
 print(df_papers_MAG)
-print(df_papers_MAG.shape)
-df_papers_MAG=df_papers_MAG.drop_duplicates()
 print(df_papers_MAG.shape)
 df_papers_MAG.to_sql('papers_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=100),\
     "title": sqlalchemy.types.NVARCHAR(length=2000),"ConferenceID": sqlalchemy.types.NVARCHAR(length=15),"JournalID": sqlalchemy.types.NVARCHAR(length=15),\
         "rank":sqlalchemy.types.INTEGER(),"referenceCount":sqlalchemy.types.INTEGER(),"citationCount":sqlalchemy.types.INTEGER(),"PublicationDate":sqlalchemy.types.Date()})
 
-
+print('## uploading paper_author', datetime.datetime.now().strftime('%H:%M:%S'))
 paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
 print(paper_author_MAG)
-print(paper_author_MAG.shape)
-paper_author_MAG=paper_author_MAG.drop_duplicates()
 print(paper_author_MAG.shape)
 paper_author_MAG.to_sql('paper_author_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=15),\
     "authorID": sqlalchemy.types.NVARCHAR(length=15),"authorOrder":sqlalchemy.types.INTEGER()})
 
-
+print('## uploading paper_reference', datetime.datetime.now().strftime('%H:%M:%S'))
 df_paper_reference_MAG = pd.read_csv(f'out/{database}/paper_reference.csv')
 print(df_paper_reference_MAG)
-print(df_paper_reference_MAG.shape)
-df_paper_reference_MAG=df_paper_reference_MAG.drop_duplicates()
 print(df_paper_reference_MAG.shape)
 df_paper_reference_MAG.to_sql('paper_reference_field',con=engine,if_exists='replace',index=False, dtype={"citingpaperID": sqlalchemy.types.NVARCHAR(length=15),\
     "citedpaperID": sqlalchemy.types.NVARCHAR(length=15)})
 
-
+print('## uploading authors', datetime.datetime.now().strftime('%H:%M:%S'))
 authors_MAG = pd.read_csv(f'out/{database}/authors.csv')
 print(authors_MAG)
-print(authors_MAG.shape)
-authors_MAG=authors_MAG.drop_duplicates()
 print(authors_MAG.shape)
 authors_MAG.to_sql('authors_field',con=engine,if_exists='replace',index=False, dtype={"authorID": sqlalchemy.types.NVARCHAR(length=15),\
     "name": sqlalchemy.types.NVARCHAR(length=999),"rank":sqlalchemy.types.INTEGER(),"PaperCount":sqlalchemy.types.INTEGER(),"CitationCount":sqlalchemy.types.INTEGER()})
 
-
 # add index
+print('## add index', datetime.datetime.now().strftime('%H:%M:%S'))
 execute('''ALTER TABLE papers_field ADD CONSTRAINT papers_field_pk PRIMARY KEY (paperID);
 alter table papers_field add index(citationCount);
 alter table paper_author_field add index(paperID);
@@ -242,11 +285,9 @@ alter table authors_field add index(name);
 alter table paper_reference_field add index(citingpaperID);
 alter table paper_reference_field add index(citedpaperID);
 ALTER TABLE paper_reference_field ADD CONSTRAINT paper_reference_field_pk PRIMARY KEY (citingpaperID,citedpaperID);
-
-alter table papers_field ADD abstract mediumtext;
-update papers_field as P, MACG.abstracts as abs set P.abstract = abs.abstract where P.paperID = abs.paperID        
 ''')
        
+# 直接update abstract太慢了，使用多进程
 '''
 alter table papers_field ADD abstract mediumtext;
 update papers_field as P, MACG.abstracts as abs set P.abstract = abs.abstract where P.paperID = abs.paperID

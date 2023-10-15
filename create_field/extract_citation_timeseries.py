@@ -197,54 +197,37 @@ update papers_field as PA, papers_field_citation_timeseries as PM set PA.citatio
 
 #######################################################################
 # update authors_field
-# 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息，添加 h-index 信息，创建名为 paper_reference_field_labeled 的表，添加名为 FellowType 列
+# 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息
 #######################################################################
 print('updating authors_field')
 
-try_execute("drop table paper_reference_field_labeled;")
-try_execute("drop table authors_field_tmp;")
 try_execute("ALTER TABLE authors_field DROP COLUMN PaperCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN authorRank;")
 try_execute("ALTER TABLE authors_field DROP COLUMN CitationCount_field;")
 try_execute("ALTER TABLE authors_field DROP COLUMN hIndex_field;")
 try_execute("ALTER TABLE authors_field DROP COLUMN FellowType;")
 
-
 execute('''
-create table authors_field_tmp select tmp.*, @curRank := @curRank + 1 AS authorRank 
-    from (select authorID, count(*) as PaperCount_field 
-        from paper_author_field 
-        group by authorID 
-        order by PaperCount_field desc) 
-    as tmp, (SELECT @curRank := 0) r;
-        
-create index author_index on authors_field_tmp(authorID);
-ALTER TABLE authors_field ADD PaperCount_field INT;
-ALTER TABLE authors_field ADD authorRank INT;
-update authors_field, authors_field_tmp 
-    set authors_field.PaperCount_field = authors_field_tmp.PaperCount_field, 
-        authors_field.authorRank = authors_field_tmp.authorRank 
-        where authors_field.authorID = authors_field_tmp.authorID;
+ALTER TABLE authors_field ADD PaperCount_field INT DEFAULT 0;
+UPDATE authors_field af
+JOIN (
+    SELECT authorID, COUNT(*) as count_papers
+    FROM paper_author_field
+    GROUP BY authorID
+) tmp ON af.authorID = tmp.authorID
+SET af.PaperCount_field = tmp.count_papers;
 
-alter table authors_field add index(authorRank);
-drop table authors_field_tmp;
-
-create table authors_field_tmp 
-    select sum(P.citationCount) as CitationCount_field,  authorID 
-    from papers_field as P join paper_author_field as PA on P.paperID = PA.paperID and P.CitationCount >=0 group by authorID;
-create index id_index on authors_field_tmp(authorID);
-ALTER TABLE authors_field ADD CitationCount_field INT;
-update authors_field, authors_field_tmp 
-    set authors_field.CitationCount_field = authors_field_tmp.CitationCount_field 
-    where authors_field.authorID = authors_field_tmp.authorID;
-drop table authors_field_tmp;
+ALTER TABLE authors_field ADD CitationCount_field INT DEFAULT 0;
+UPDATE authors_field af
+JOIN (
+    SELECT PA.authorID, SUM(P.citationCount) as total_citations
+    FROM papers_field as P 
+    JOIN paper_author_field as PA on P.paperID = PA.paperID 
+    WHERE P.CitationCount >= 0 
+    GROUP BY PA.authorID
+) tmp ON af.authorID = tmp.authorID
+SET af.CitationCount_field = tmp.total_citations;
 
 ALTER TABLE authors_field ADD hIndex_field INT;
-create table paper_reference_field_labeled(
-citingpaperID varchar(15),
-citedpaperID varchar(15),
-extends_prob double
-);
 ''')
 
 # ALTER TABLE authors_field ADD FellowType varchar(999);
