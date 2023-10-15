@@ -171,73 +171,23 @@ def get_data_from_table_concurrent(table_name, key='paperID', data=papers):
     print(f'{table_name}({key}) drop_duplicates', db.shape, f'time cost: {time.time()-t}')
     return db
 
-
-# print('# getting papers from MAG', datetime.datetime.now().strftime('%H:%M:%S'))
-# papers_df = get_data_from_table_concurrent('papers')
-# papers_df.to_csv(f'out/{database}/papers.csv',index=False)
-
-# get_data_from_table_concurrent('paper_author').to_csv(f'out/{database}/paper_author.csv',index=False)
-
-# citing_db = get_data_from_table_concurrent('paper_reference', key='citingpaperID')
-# cited_db = get_data_from_table_concurrent('paper_reference', key='citedpaperID')
-# db = pd.concat([citing_db, cited_db])
-# print('paper_reference original', db.shape)
-# db=db.drop_duplicates()
-# print('paper_reference drop_duplicates', db.shape)
-# db.to_csv(f'out/{database}/paper_reference.csv',index=False)
-
-# paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
-# authors=paper_author_MAG['authorID'].drop_duplicates().values
-# get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/{database}/authors.csv',index=False)
-
-
-papers_df = pd.read_csv(f'out/{database}/papers.csv')
-
-print('## extract paper abstract', datetime.datetime.now().strftime('%H:%M:%S'))
-def extract_paper_abstract(pairs):
-    papers, ix, pbar = pairs
-    # print('extract_paper_abstract', len(papers), info)
-    conn = pymysql.connect(host='localhost', port=3306, user='root', password='root', db='MACG', charset='utf8')
-    cursor = conn.cursor()
-    _paperID2abstract = defaultdict(str)
-
-    # 使用IN子句一次查询多个paperID
-    paper_ids_str = ', '.join(map(str, papers))
-    cursor.execute(f"""SELECT paperID, abstract
-                       FROM abstracts
-                       WHERE paperID IN ({paper_ids_str})
-                       ORDER BY paperID;""")
-    result = cursor.fetchall()
-
-    # 使用Python代码来组合结果
-    for paperID, abstract in result:
-        _paperID2abstract[paperID] = abstract
-
-    cursor.close()
-    conn.close()
-    pbar.n = int(ix)
-    pbar.refresh()
-    return _paperID2abstract
-
-from collections import defaultdict
-paperID2abstract = defaultdict(str)
-group_length = len(papers) // GROUP_SIZE + 1
-pbar = tqdm(total=group_length)
-with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num * 5) as executor:
-    results = executor.map(extract_paper_abstract, [(papers[i*GROUP_SIZE:(i+1)*GROUP_SIZE], i, pbar) for i in range(group_length)])
-    for result in results:
-        paperID2abstract.update(result)
-print('finish extract_paper_abstract', len(paperID2abstract))
-papers_df['abstract'] = papers_df['paperID'].map(paperID2abstract)
+print('# getting papers from MAG', datetime.datetime.now().strftime('%H:%M:%S'))
+papers_df = get_data_from_table_concurrent('papers')
 papers_df.to_csv(f'out/{database}/papers.csv',index=False)
 
-print(df_papers_MAG)
-print(df_papers_MAG.shape)
-df_papers_MAG.to_sql('papers_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=100),\
-    "title": sqlalchemy.types.NVARCHAR(length=2000),"ConferenceID": sqlalchemy.types.NVARCHAR(length=15),"JournalID": sqlalchemy.types.NVARCHAR(length=15),\
-        "rank":sqlalchemy.types.INTEGER(),"referenceCount":sqlalchemy.types.INTEGER(),"citationCount":sqlalchemy.types.INTEGER(),"PublicationDate":sqlalchemy.types.Date(), "abstract": sqlalchemy.types.NVARCHAR(length=9999)})
+get_data_from_table_concurrent('paper_author').to_csv(f'out/{database}/paper_author.csv',index=False)
 
-os._exit(0)
+citing_db = get_data_from_table_concurrent('paper_reference', key='citingpaperID')
+cited_db = get_data_from_table_concurrent('paper_reference', key='citedpaperID')
+db = pd.concat([citing_db, cited_db])
+print('paper_reference original', db.shape)
+db=db.drop_duplicates()
+print('paper_reference drop_duplicates', db.shape)
+db.to_csv(f'out/{database}/paper_reference.csv',index=False)
+
+paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
+authors=paper_author_MAG['authorID'].drop_duplicates().values
+get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/{database}/authors.csv',index=False)
 
 
 ####################################################################################
