@@ -9,27 +9,61 @@ import os
 import time
 import sqlalchemy
 import concurrent.futures
+import multiprocessing
 
 from utils import *
 
 engine_MAG = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG', pool_size=20)
-GROUP_SIZE = 1000
+GROUP_SIZE = 2000
+multiproces_num = 20
 
 ####################################################################################
 # extract paperID
 # 根据领域名称查询fieldID，如： select * from field_of_study where name='Database';
 ####################################################################################
 
+
+
+def get_paperID_batch(pair):
+    fieldID, offset, verbose = pair
+    engine = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG')
+    sql_data = f'select paperID from papers_field where fieldID=\'{fieldID}\' LIMIT {GROUP_SIZE} OFFSET {offset};'
+    if verbose:
+        print('* ' + sql_data)
+    db_data_single = pd.read_sql_query(sql_data, engine)['paperID'].tolist()
+    engine.dispose()
+    return db_data_single
+
+
+def worker(task_queue, result_queue):
+    while True:
+        task = task_queue.get()
+        # 这里，你可以运行你的函数，如 get_paperID_batch
+        result = get_paperID_batch(task)
+        if len(result):
+            result_queue.put(result)
+        else:
+            break
+
+
 def read_papers(fields, verbose=True):
     paper_ids = set()
     for fieldID in tqdm(set(fields)):
-        sql_data = f'select paperID from papers_field where fieldID=\'{fieldID}\';'
-        if verbose:
-            print('*', sql_data)
-        db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
+        # 使用分页查询（也叫做分块查询）来获取所有的paperID
+        offset = 0
+        finish = False
+        db_data_single = set()
+        while not finish:
+            with multiprocessing.Pool(processes=multiproces_num) as pool:
+                results = pool.map(get_paperID_batch, [(fieldID, offset+i*GROUP_SIZE, verbose) for i in range(multiproces_num)])
+                for result in results:
+                    db_data_single.update(result)
+                    if len(result) == 0:
+                        finish = True
+            offset += multiproces_num * GROUP_SIZE
         paper_ids.update(db_data_single)
         if verbose:
-            print(f'finish reading paperID on field {fieldID}, added:', len(db_data_single))
+            print(f'finish reading paperID on field {fieldID}, single: {len(db_data_single)}, all: {len(paper_ids)}')
     return paper_ids
 
 db_data = read_papers(field_info['fieldID'])
@@ -41,7 +75,7 @@ for fieldID in set(field_info.get('children', [])):
     print('*', sql_data, len(children_fields))
     db_data_single = read_papers(children_fields, verbose=False)
     db_data.update(db_data_single)
-    print(f'finish reading paperID on children of {fieldID}, added:', len(db_data_single))
+    print(f'finish reading paperID on children of {fieldID}, single: {len(db_data_single)}, all: {len(db_data)}')
 print(f'## finish reading paperID on children:', len(db_data))
 
 for journalID in tqdm(set(field_info.get('JournalID', []))):
@@ -49,7 +83,7 @@ for journalID in tqdm(set(field_info.get('JournalID', []))):
     print('*', sql_data)
     db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
     db_data.update(db_data_single)
-    print(f'finish reading paperID on Journal {journalID}, added:', len(db_data_single))
+    print(f'finish reading paperID on Journal {journalID}, single: {len(db_data_single)}, all: {len(db_data)}')
 print(f'## finish reading paperID on Journal:', len(db_data))
 
 for conferenceID in tqdm(set(field_info.get('ConferenceID', []))):
@@ -57,7 +91,7 @@ for conferenceID in tqdm(set(field_info.get('ConferenceID', []))):
     print('*', sql_data)
     db_data_single = pd.read_sql_query(sql_data, engine_MAG)['paperID'].tolist()
     db_data.update(db_data_single)
-    print(f'finish reading paperID on Conference {conferenceID}, added:', len(db_data_single))
+    print(f'finish reading paperID on Conference {conferenceID}, single: {len(db_data_single)}, all: {len(db_data)}')
 print(f'## finish reading paperID on Conference:', len(db_data))
 
 papers = list(db_data)

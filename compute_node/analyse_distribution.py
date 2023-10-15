@@ -63,6 +63,7 @@ Mean of isKeyPaper: 0.612727694724963
 Variance of isKeyPaper: 0.22085644677635208
 save distribution to out/scigene_visualization_field/isKeyPaper_distribution.png
 
+len(files): 5948
 0 ratio of isKeyPaper: 0.42371147483893434
 Not 0/1 ratio of isKeyPaper: 0.08122932265366534
 1 ratio of isKeyPaper: 0.4950592025074003

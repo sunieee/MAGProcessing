@@ -2,7 +2,8 @@
 # 调整缓冲区的大小，但不完全禁用它，可以使用stdbuf命令。stdbuf命令允许你修改标准输入、标准输出和标准错误的缓冲。
 # stdbuf -o0 ./create_field.sh > log/scigene_visualization2_field.log
 
-export database=scigene_visualization_field
+# export database=scigene_visualization_field
+export database=scigene_database_field
 
 rm -rf out/$database
 mkdir -p out/$database
