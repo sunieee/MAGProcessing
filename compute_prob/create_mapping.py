@@ -5,49 +5,47 @@ import pandas as pd
 
 MIN_STUDENT_AUTHOR_ORDER = 3
 
-# Load CSV files into DataFrames
-path_to_csv = f"out/{database}/csv"
+df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
+df_paper_author_field_filtered = df_paper_author_field_filtered[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
 
-print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S"))
-if not os.path.exists(path_to_csv):
-    os.makedirs(path_to_csv)
-    df_paper_author_field = pd.read_sql_query(f"select * from paper_author_field", conn)
-    df_paper_author_field.to_csv(f"{path_to_csv}/paper_author_field.csv", index=False)
-    
-    df_papers_field = pd.read_sql_query(f"select * from papers_field", conn)
-    df_papers_field.to_csv(f"{path_to_csv}/papers_field.csv", index=False)
-else:
-    df_paper_author_field = pd.read_csv(f"{path_to_csv}/paper_author_field.csv")
-    df_papers_field = pd.read_csv(f"{path_to_csv}/papers_field.csv")
-
-df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
-df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
-df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
-# df_paper_author_field.set_index('paperID', inplace=True)
-# df_papers_field.set_index('paperID', inplace=True)
-
-top_field_paper_author_df = top_field_authors_df.merge(df_paper_author_field, on="authorID")
-top_field_paper_author_df = top_field_paper_author_df[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
+# df_paper_author_field_filtered = top_field_authors_df.merge(df_paper_author_field, on="authorID")
+# df_paper_author_field_filtered = df_paper_author_field_filtered[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
 
 # Creating the firstAuthorTmp DataFrame
 print("Pre-compute first author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
-firstAuthorTmp = top_field_paper_author_df.merge(df_paper_author_field, on="paperID", suffixes=('', '_first')) \
+firstAuthorTmp = df_paper_author_field_filtered.merge(df_paper_author_field, on="paperID", suffixes=('', '_first')) \
     .query("authorOrder > 1 and authorOrder_first == 1") 
     # .groupby(['authorID_first', 'authorID']).size().reset_index(name='counts')
 firstAuthorTmp = firstAuthorTmp[['authorID', 'paperID', 'authorOrder', 'authorID_first']].drop_duplicates()
 
-print("compute first-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
-firstAuthorPapers = df_papers_field.merge(df_paper_author_field, on="paperID") \
-    .loc[df_paper_author_field['authorID'].isin(firstAuthorTmp['authorID_first'].unique()), :]
-firstAuthorPaperCountMap = firstAuthorPapers.groupby(['authorID', 'year', 'authorOrder']).size().to_dict()
 
-print("compute top-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
-filtered_authors_papers = top_field_paper_author_df.merge(df_papers_field, on="paperID")
-topAuthorPaperCountMap = filtered_authors_papers.groupby(['authorID', 'year']).size().to_dict()
+print("compute first-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
+# Perform the necessary merges and group by operations
+merged_df = df_paper_author_field.merge(df_papers_field, on='paperID')
+filtered_df = merged_df[merged_df['authorID'].isin(firstAuthorTmp['authorID_first'].unique())]
+
+grouped = filtered_df.groupby(['authorID', 'authorOrder', 'year']).size().reset_index(name='cnt')
+
+firstAuthorPaperCountMap = {}
+firstAuthorWeightedPaperCountMap = {}
+
+for _, row in grouped.iterrows():
+    authorID = row['authorID'].strip()
+    authorOrder = int(row['authorOrder'])
+    year = int(row['year'])
+    count = int(row['cnt'])
+
+    # 更新firstAuthorPaperCountMap
+    yearCountMap = firstAuthorPaperCountMap.setdefault(authorID, {})
+    yearCountMap[year] = yearCountMap.get(year, 0) + count
+
+    # 更新firstAuthorWeightedPaperCountMap
+    if authorOrder <= MIN_STUDENT_AUTHOR_ORDER:
+        yearWeightedCountMap = firstAuthorWeightedPaperCountMap.setdefault(authorID, {})
+        yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
+
 
 print("compute co-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
-
-
 coauthor_joined = firstAuthorTmp.merge(
     df_paper_author_field[df_paper_author_field['authorOrder'] <= MIN_STUDENT_AUTHOR_ORDER], 
     left_on='authorID_first', right_on='authorID', suffixes=('', '_PA1')
@@ -57,13 +55,10 @@ coauthor_joined = firstAuthorTmp.merge(
 
 # Filtering based on the provided condition
 coauthor_joined = coauthor_joined[coauthor_joined['authorOrder_PA1'] < coauthor_joined['authorOrder_PA2']]
-
 # Joining with df_papers_field to get the year of each paper
 coauthor_year_joined = coauthor_joined.merge(df_papers_field, on="paperID")
-
 # Creating the coAuthorWeightedPaperCountMap and coAuthorPaperCountMap
 grouped = coauthor_year_joined.groupby(['authorID_first', 'authorID', 'authorOrder_PA1', 'year']).size().reset_index(name='count')
-
 grouped['coAuthorID'] = grouped['authorID_first'] + "-" + grouped['authorID']
 
 coAuthorWeightedPaperCountMap = {}
@@ -82,6 +77,26 @@ for _, row in grouped.iterrows():
     # For coAuthorPaperCountMap
     yearCountMap = coAuthorPaperCountMap.setdefault(coAuthorID, {})
     yearCountMap[year] = yearCountMap.get(year, 0) + count
+
+
+print("compute top-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
+merged_df = df_paper_author_field_filtered.merge(df_papers_field, on='paperID', how='inner', suffixes=('', '_P'))
+merged_df = merged_df[['authorID', 'paperID', 'authorOrder', 'year']].drop_duplicates()
+
+# Group by necessary columns
+grouped = filtered_df.groupby(['authorID', 'year']).size().reset_index(name='cnt')
+
+topAuthorPaperCountMap = {}
+
+for _, row in grouped.iterrows():
+    authorID = row['authorID'].strip()
+    year = int(row['year'])
+    count = int(row['cnt'])
+
+    # 更新topAuthorPaperCountMap
+    yearCountMap = topAuthorPaperCountMap.setdefault(authorID, {})
+    yearCountMap[year] = yearCountMap.get(year, 0) + count
+
 
 # save all the maps to {path_to_csv}/*.json
 with open(f"{path_to_csv}/firstAuthorPaperCountMap.json", "w") as f:

@@ -11,7 +11,7 @@ def analyze_csv(filename, column_name):
         df = pd.read_csv(filename)
     else:
         # 使用glob找到文件夹下所有的CSV文件
-        files = glob.glob(f"{filename}/papers/*.csv")
+        files = glob.glob(f"{filename}/*.csv")
         
         print('len(files):', len(files))
         # 读取并合并所有CSV文件
@@ -52,7 +52,8 @@ def analyze_csv(filename, column_name):
     # plt.show()
 
 # 使用
-analyze_csv(f'out/{database}', 'isKeyPaper')
+analyze_csv(f'out/{database}/papers', 'isKeyPaper')
+analyze_csv(f'out/{database}/edge_proba.csv', 'proba')
 
 '''
 len(files): 103

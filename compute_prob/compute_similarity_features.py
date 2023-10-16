@@ -8,6 +8,7 @@ import ssl
 import numpy as np
 from gensim import utils
 from utils import *
+import json
 
 # run before
 # nltk.download('stopwords')
@@ -20,9 +21,31 @@ x_train = []
 ############################################################
 # read all the selected papers in MAG
 db_suffix = 'ARC' if database=="scigene_acl_anthology" else 'field'
-db = pd.read_sql_query(f'''select paperID, title, abstract 
-                        from papers_{db_suffix}
-                        where paperID in {nodes}''', engine)
+
+
+if os.path.exists(f"out/{database}/paperID2abstract.json"):
+    with open(f"out/{database}/paperID2abstract.json") as f:
+        paperID2abstract = json.load(f)
+else:
+    paperID2abstract = defaultdict(str)
+    multiproces_num = 20
+    group_size = 2000
+    with multiprocessing.Pool(processes=multiproces_num) as pool:
+        results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
+        for result in results:
+            paperID2abstract.update(result)
+    print('finish extract_paper_abstract', len(paperID2abstract))
+    with open(f"out/{database}/paperID2abstract.json", 'w') as f:
+        json.dump(paperID2abstract, f)
+
+db = pd.read_csv(f'../create_field/out/{database}/papers.csv')
+db = db[db['paperID'].isin(nodes)]
+db['abstract'] = db['paperID'].map(paperID2abstract)
+db = db[['paperID', 'title', 'abstract']]
+
+# db = pd.read_sql_query(f'''select paperID, title, abstract 
+#                         from papers_{db_suffix}
+#                         where paperID in {nodes}''', engine)
 
 print('similarity_mysql:',len(db))
 print(db.head())

@@ -117,7 +117,7 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
     for result in results:
         paperID2venue.update(result)
         
-group_size = 1000
+group_size = 2000
 group_length = math.ceil(len(paperID_list)/group_size)
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_authors, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])

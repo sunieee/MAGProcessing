@@ -182,36 +182,10 @@ def compute_supervisor_rate(studentID, supervisorID, year):
     return maxSupervisedRate * supervisingRate
 
 
-# path_to_csv = f"../create_field/out/{database}/"
-# df_papers_field = pd.read_csv(path_to_csv + "papers.csv")
-# df_paper_author_field = pd.read_csv(path_to_csv + "paper_author.csv")
-
-print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S"))
-path_to_csv = f"out/{database}/csv"
-if not os.path.exists(path_to_csv):
-    os.makedirs(path_to_csv)
-    df_paper_author_field = pd.read_sql_query(f"select * from paper_author_field", conn)
-    df_paper_author_field.to_csv(f"{path_to_csv}/paper_author_field.csv", index=False)
-    
-    df_papers_field = pd.read_sql_query(f"select * from papers_field", conn)
-    df_papers_field.to_csv(f"{path_to_csv}/papers_field.csv", index=False)
-else:
-    df_paper_author_field = pd.read_csv(f"{path_to_csv}/paper_author_field.csv")
-    df_papers_field = pd.read_csv(f"{path_to_csv}/papers_field.csv")
-
-df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
-df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
-df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
-
-# df_authors_field = pd.read_sql_query(f"select authorID, name from authors_field", conn)
-# df_authors_field.to_csv(f"{path_to_csv}/authors_field.csv", index=False)
-df_authors_field = pd.read_csv(f"../create_field/out/{database}/authors.csv")
-df_authors_field['authorID'] = df_authors_field['authorID'].astype(str)
 
 print("create util mapping", datetime.datetime.now().strftime("%H:%M:%S"))
 authorID2name = df_authors_field.set_index('authorID')['name'].to_dict()
 paperID2FirstAuthorID = df_paper_author_field[df_paper_author_field['authorOrder'] == 1].set_index('paperID')['authorID'].to_dict()
-
 
 ######################################################################
 # 从数据库中查询某个领域的前几名作者。
