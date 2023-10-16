@@ -2,14 +2,7 @@ import math
 from utils import *
 import json
 import pandas as pd
-
-connField = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=f"{database}",
-                            charset='utf8')
-cursorField = connField.cursor()
+import datetime
 
 def convert_keys(pairs):
     new_pairs = {}
@@ -20,16 +13,18 @@ def convert_keys(pairs):
             new_pairs[key] = value
     return new_pairs
 
-# load all the maps to out/{database}/map/*.json with same name
-with open(f"out/{database}/map/firstAuthorPaperCountMap.json", "r") as f:
+# load all the maps to {path_to_mapping}/*.json with same name
+print("load all the maps!", datetime.datetime.now().strftime("%H:%M:%S"))
+path_to_mapping = f'out/{database}/map'
+with open(f"{path_to_mapping}/firstAuthorPaperCountMap.json", "r") as f:
     firstAuthorPaperCountMap = json.load(f, object_pairs_hook=convert_keys)
-with open(f"out/{database}/map/firstAuthorWeightedPaperCountMap.json", "r") as f:
+with open(f"{path_to_mapping}/firstAuthorWeightedPaperCountMap.json", "r") as f:
     firstAuthorWeightedPaperCountMap = json.load(f, object_pairs_hook=convert_keys)
-with open(f"out/{database}/map/coAuthorWeightedPaperCountMap.json", "r") as f:
+with open(f"{path_to_mapping}/coAuthorWeightedPaperCountMap.json", "r") as f:
     coAuthorWeightedPaperCountMap = json.load(f, object_pairs_hook=convert_keys)
-with open(f"out/{database}/map/coAuthorPaperCountMap.json", "r") as f:
+with open(f"{path_to_mapping}/coAuthorPaperCountMap.json", "r") as f:
     coAuthorPaperCountMap = json.load(f, object_pairs_hook=convert_keys)
-with open(f"out/{database}/map/topAuthorPaperCountMap.json", "r") as f:
+with open(f"{path_to_mapping}/topAuthorPaperCountMap.json", "r") as f:
     topAuthorPaperCountMap = json.load(f, object_pairs_hook=convert_keys)
 
 firstAuthorPaperCountMap = {str(k): v for k, v in firstAuthorPaperCountMap.items()}
@@ -39,7 +34,6 @@ coAuthorPaperCountMap = {str(k): v for k, v in coAuthorPaperCountMap.items()}
 topAuthorPaperCountMap = {str(k): v for k, v in topAuthorPaperCountMap.items()}
 
 
-MIN_STUDENT_AUTHOR_ORDER = 3
 MIN_SUPERVISOR_RATE = 0.5
 MIN_SUPERVISED_RATE = 0.6
 MIN_SUPERVISING_RATE = 1
@@ -188,224 +182,36 @@ def compute_supervisor_rate(studentID, supervisorID, year):
     return maxSupervisedRate * supervisingRate
 
 
-def computeSupervisorRate_old(studentID, supervisorID, year):
-    # compute supervised rate
-    studentPaperCountMap = firstAuthorPaperCountMap[studentID]
-    # the sorted list of years that the student has paper publication, truncated to {0,1,..., MAX_ACADEMIC_YEAR}
-    studentAcademicYearList = sorted(studentPaperCountMap.keys())[
-        0 : MAX_ACADEMIC_YEAR + 1
-    ]
-    max_student_academic_year = len(studentAcademicYearList) - 1
-    if not (year in studentAcademicYearList):
-        return 0.0
+# path_to_csv = f"../create_field/out/{database}/"
+# df_papers_field = pd.read_csv(path_to_csv + "papers.csv")
+# df_paper_author_field = pd.read_csv(path_to_csv + "paper_author.csv")
 
-    currentAcademicYearIndex = studentAcademicYearList.index(year)
-    studentWeightedPaperCountMap = firstAuthorWeightedPaperCountMap[studentID]
+print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S"))
+path_to_csv = f"out/{database}/csv"
+if not os.path.exists(path_to_csv):
+    os.makedirs(path_to_csv)
+    df_paper_author_field = pd.read_sql_query(f"select * from paper_author_field", conn)
+    df_paper_author_field.to_csv(f"{path_to_csv}/paper_author_field.csv", index=False)
+    
+    df_papers_field = pd.read_sql_query(f"select * from papers_field", conn)
+    df_papers_field.to_csv(f"{path_to_csv}/papers_field.csv", index=False)
+else:
+    df_paper_author_field = pd.read_csv(f"{path_to_csv}/paper_author_field.csv")
+    df_papers_field = pd.read_csv(f"{path_to_csv}/papers_field.csv")
 
-    coAuthorID = studentID + "-" + supervisorID
-    studentCoAuthorWeightedPaperCountMap = coAuthorWeightedPaperCountMap[coAuthorID]
+df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
+df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
+df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
 
-    # the same as below except that co-author weighted count is replaced by student weighted count
+# df_authors_field = pd.read_sql_query(f"select authorID, name from authors_field", conn)
+# df_authors_field.to_csv(f"{path_to_csv}/authors_field.csv", index=False)
+df_authors_field = pd.read_csv(f"../create_field/out/{database}/authors.csv")
+df_authors_field['authorID'] = df_authors_field['authorID'].astype(str)
 
-    start_student_count_list = {}
-    end_student_count_list = {}
-    total_student_count = 0
+print("create util mapping", datetime.datetime.now().strftime("%H:%M:%S"))
+authorID2name = df_authors_field.set_index('authorID')['name'].to_dict()
+paperID2FirstAuthorID = df_paper_author_field[df_paper_author_field['authorOrder'] == 1].set_index('paperID')['authorID'].to_dict()
 
-    start_student_count_list[0] = 0
-    for i in range(1, max_student_academic_year + 1):
-        if studentAcademicYearList[i - 1] in studentWeightedPaperCountMap:
-            start_student_count_list[i] = (
-                start_student_count_list[i - 1]
-                + studentWeightedPaperCountMap[studentAcademicYearList[i - 1]]
-            )
-        else:
-            start_student_count_list[i] = start_student_count_list[i - 1]
-
-    end_student_count_list[max_student_academic_year] = 0
-    for i in range(max_student_academic_year - 1, currentAcademicYearIndex - 1, -1):
-        if studentAcademicYearList[i + 1] in studentWeightedPaperCountMap:
-            end_student_count_list[i] = (
-                end_student_count_list[i + 1]
-                + studentWeightedPaperCountMap[studentAcademicYearList[i + 1]]
-            )
-        else:
-            end_student_count_list[i] = end_student_count_list[i + 1]
-
-    total_student_count = (
-        start_student_count_list[currentAcademicYearIndex]
-        + end_student_count_list[currentAcademicYearIndex]
-        + studentWeightedPaperCountMap[
-            studentAcademicYearList[currentAcademicYearIndex]
-        ]
-    )
-
-    # start_list[N] = accumulated weighted co-author paper count from academic year 0 to N-1, excluding the year N, N <= current_academic_year
-    # end_list[N] = accumulated weighted co-author paper count from academic year N to MAX_ACADEMIC_YEAR, excluding the year N, N >= current_academic_year
-
-    start_coauthor_count_list = {}
-    end_coauthor_count_list = {}
-    total_coauthor_count = 0
-
-    start_coauthor_count_year_list = {}
-    end_coauthor_count_year_list = {}
-    total_coauthor_count_year = 0
-
-    start_coauthor_count_list[0] = 0
-    start_coauthor_count_year_list[0] = 0
-
-    for i in range(1, currentAcademicYearIndex + 1):
-        if studentAcademicYearList[i - 1] in studentCoAuthorWeightedPaperCountMap:
-            start_coauthor_count_list[i] = start_coauthor_count_list[
-                i - 1
-            ] + studentCoAuthorWeightedPaperCountMap[
-                studentAcademicYearList[i - 1]
-            ] * min(
-                SUPERVISED_YEAR_MODIFIER[i - 1],
-                SUPERVISED_PAPER_MODIFIER[int(start_student_count_list[i - 1])],
-            )
-            start_coauthor_count_year_list[i] = (
-                start_coauthor_count_year_list[i - 1] + 1
-            )
-        else:
-            start_coauthor_count_list[i] = start_coauthor_count_list[i - 1]
-            start_coauthor_count_year_list[i] = start_coauthor_count_year_list[i - 1]
-
-    end_coauthor_count_list[max_student_academic_year] = 0
-    end_coauthor_count_year_list[max_student_academic_year] = 0
-
-    for i in range(max_student_academic_year - 1, currentAcademicYearIndex - 1, -1):
-        if studentAcademicYearList[i + 1] in studentCoAuthorWeightedPaperCountMap:
-            end_coauthor_count_list[i] = end_coauthor_count_list[
-                i + 1
-            ] + studentCoAuthorWeightedPaperCountMap[
-                studentAcademicYearList[i + 1]
-            ] * min(
-                SUPERVISED_YEAR_MODIFIER[i + 1],
-                SUPERVISED_PAPER_MODIFIER[int(start_student_count_list[i + 1])],
-            )
-            end_coauthor_count_year_list[i] = end_coauthor_count_year_list[i + 1] + 1
-        else:
-            end_coauthor_count_list[i] = end_coauthor_count_list[i + 1]
-            end_coauthor_count_year_list[i] = end_coauthor_count_year_list[i + 1]
-
-    total_coauthor_count = (
-        start_coauthor_count_list[currentAcademicYearIndex]
-        + end_coauthor_count_list[currentAcademicYearIndex]
-        + studentCoAuthorWeightedPaperCountMap[
-            studentAcademicYearList[currentAcademicYearIndex]
-        ]
-        * min(
-            SUPERVISED_YEAR_MODIFIER[currentAcademicYearIndex],
-            SUPERVISED_PAPER_MODIFIER[
-                int(start_student_count_list[currentAcademicYearIndex])
-            ],
-        )
-    )
-
-    total_coauthor_count_year = (
-        start_coauthor_count_year_list[currentAcademicYearIndex]
-        + end_coauthor_count_year_list[currentAcademicYearIndex]
-        + 1
-    )
-
-    # iterate all possible year span (window) to compute the max supervisedRate
-
-    maxSupervisedRate = 0.0
-
-    for start_year_index in range(0, currentAcademicYearIndex + 1):
-        for end_year_index in range(
-            currentAcademicYearIndex, max_student_academic_year + 1
-        ):
-            # there is a problem here: the co-authorship can happen in the same year,
-            # because the surrounding years may not have co-authorship between student and supervisor
-            # then the small window with year_span >= 2 can still be the maximal because the co-authorship
-            # are too centralized in the same year
-            #
-            # we solve it by using a count list for co-authorship years
-            #
-            if (end_year_index - start_year_index + 1) < MIN_SUPERVISED_YEAR_SPAN:
-                continue
-
-            coauthor_count_year = (
-                total_coauthor_count_year
-                - start_coauthor_count_year_list[start_year_index]
-                - end_coauthor_count_year_list[end_year_index]
-            )
-
-            if coauthor_count_year < MIN_SUPERVISED_YEAR_SPAN:
-                continue
-
-            denominator = (
-                total_student_count
-                - start_student_count_list[start_year_index]
-                - end_student_count_list[end_year_index]
-            )
-
-            if denominator < MIN_SUPERVISED_PAPER_SPAN:
-                continue
-
-            numerator = (
-                total_coauthor_count
-                - start_coauthor_count_list[start_year_index]
-                - end_coauthor_count_list[end_year_index]
-            )
-
-            supervisedRate = numerator / denominator
-
-            if supervisedRate > maxSupervisedRate:
-                maxSupervisedRate = supervisedRate
-
-    maxSupervisedRate = min(1.0, maxSupervisedRate / MIN_SUPERVISED_RATE)
-
-    # compute supervising rate
-    supervisorPaperCountMap = topAuthorPaperCountMap[supervisorID]
-
-    # the sorted list of years that the supervisor has paper publication
-    supervisorAcademicYearList = sorted(supervisorPaperCountMap.keys())
-    currentAcademicYearIndex = supervisorAcademicYearList.index(year)
-
-    total_supervisor_count = 0
-    for i in range(currentAcademicYearIndex):
-        total_supervisor_count = (
-            total_supervisor_count
-            + supervisorPaperCountMap[supervisorAcademicYearList[i]]
-        )
-
-    coAuthorID = studentID + "-" + supervisorID
-    studentCoAuthorPaperCountMap = coAuthorPaperCountMap[coAuthorID]
-
-    coAuthorAcademicYearList = sorted(studentCoAuthorPaperCountMap.keys())
-    currentAcademicYearIndex = coAuthorAcademicYearList.index(year)
-
-    total_coauthor_count = 0
-    for i in range(currentAcademicYearIndex):
-        total_coauthor_count = (
-            total_coauthor_count
-            + studentCoAuthorPaperCountMap[coAuthorAcademicYearList[i]]
-        )
-
-    supervisingRate = 0.0
-
-    denominator = total_coauthor_count
-    numerator = total_supervisor_count - total_coauthor_count
-
-    if numerator < 0:
-        print(
-            "Error in computation, supervisor paper count smaller than co-author paper count:",
-            studentID,
-            supervisorID,
-        )
-        supervisingRate = 0.0
-    elif numerator == 0:
-        supervisingRate = 0.0
-    elif denominator == 0:
-        supervisingRate = MIN_SUPERVISING_RATE
-    else:
-        supervisingRate = numerator / denominator
-
-    supervisingRate = min(1.0, supervisingRate / MIN_SUPERVISING_RATE)
-
-    return maxSupervisedRate * supervisingRate
 
 ######################################################################
 # 从数据库中查询某个领域的前几名作者。
@@ -416,60 +222,46 @@ def computeSupervisorRate_old(studentID, supervisorID, year):
 # 更新数据库中的论文记录，标记它是否是关键论文。
 # 提交数据库更改。
 ######################################################################
-print('## start to process each author (key paper)', len(authorID_list))
+print('## start to process each author (key paper)', len(authorID_list), datetime.datetime.now().strftime("%H:%M:%S"))
 
 def build_top_author(pairs):
     authorID_list, order = pairs
     print(order, len(authorID_list))
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=database_pcg,
-                            charset='utf8')
-    cursor = conn.cursor()
 
     for authorID in tqdm(authorID_list):
-        print('###', authorID)
-        paper_rows = executeFetch(f"select paperID, year, firstAuthorID, authorOrder from papers_{authorID}", cursor=cursor)
-        # process each paper of the author
-        print('start to process each paper of the author', len(paper_rows))
-        for paper_row in paper_rows:
-            paperID = str(paper_row[0].strip())
-            paperYear = int(paper_row[1])
-            if not paper_row[2]:
-                authorOrder = int(paper_row[3])
-                print('Target paper do not have first author!', paperID, authorOrder)
+        print('## ' + authorID)
+
+        # Filter out rows from df_paper_author_field for the specific authorID
+        df_paper_author_field_author = df_paper_author_field[df_paper_author_field['authorID'] == authorID]
+
+        # Perform the same operations you did with SQL directly with pandas
+        df = df_papers_field.merge(df_paper_author_field_author, on="paperID").groupby(['paperID', 'title', 'year']).agg({
+            'authorOrder': 'min'
+        }).reset_index()
+        df['isKeyPaper'] = 0.0
+
+        df['firstAuthorID'] = df['paperID'].map(paperID2FirstAuthorID)
+        df['firstAuthorName'] = df['firstAuthorID'].map(authorID2name)
+
+        # Process the DataFrame
+        for i, row in df.iterrows():
+            if pd.isna(row['firstAuthorID']):
+                authorOrder = int(row['authorOrder'])
+                print('Target paper does not have first author!', row['paperID'], authorOrder)
                 isKeyPaper = 1 / authorOrder
             else:
-                firstAuthorID = str(paper_row[2].strip())
-                if firstAuthorID == authorID:
+                if row['firstAuthorID'] == authorID:
                     isKeyPaper = 1
                 else:
-                    isKeyPaper = computeSupervisorRate_old(firstAuthorID, authorID, paperYear)
-            print(paperID, isKeyPaper)
+                    isKeyPaper = compute_supervisor_rate(row['firstAuthorID'], authorID, int(row['year']))
+            df.at[i, 'isKeyPaper'] = isKeyPaper
+            print(row['paperID'], isKeyPaper)
 
-            cursor.execute(f"update papers_{authorID} set isKeyPaper = %s where paperID = %s", (isKeyPaper, paperID))
-
-        # print(f"Update key papers for field author {authorName} with rank {rank}: authorID",)
-        conn.commit()
-
-        papers_df = pd.read_sql(f"SELECT * FROM papers_{authorID}", conn)
-        papers_df.to_csv(f'out/{database}/papers/{authorID}.csv', index=False)
-
-    cursor.close()
-    conn.close()
+        df.to_csv(f'out/{database}/papers/{authorID}.csv', index=False)
 
 
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(build_top_author, [(authorID_list[i::multiproces_num], f'{i}/{multiproces_num}') for i in range(multiproces_num)])
 
-# dump all top field authors
-df = pd.read_sql(f"""select * from {database}.authors_field
-    where {filterCondition}""", conn)
-df.to_csv(f'out/{database}/top_field_authors.csv', index=False)
-
 cursor.close()
-cursorField.close()
 conn.close()
-connField.close()

@@ -182,7 +182,7 @@ def test():
     print('time', time.time() - t)
 
     
-filterCondition = 'PaperCount_field > 20'
+filterCondition = os.environ.get('filterCondition', 'PaperCount_field > 20')
 print(filterCondition)
 df = pd.read_sql_query(f'select * from authors_field where {filterCondition}', engine)
 

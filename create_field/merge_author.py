@@ -30,7 +30,7 @@ WHERE authorID = '{id2}';
 
     authorID_list.append(id1)
 
-filterCondition = f"authorID IN ({', '.join(map(str, authorID_list))})"
+repeatCondition = f"authorID IN ({', '.join(map(str, authorID_list))})"
 
 #######################################################################
 # update authors_field (局部更新用户信息)
@@ -47,7 +47,7 @@ UPDATE authors_field af
 JOIN (
     SELECT authorID, COUNT(*) as count_papers
     FROM paper_author_field 
-    WHERE {filterCondition}
+    WHERE {repeatCondition}
     GROUP BY authorID
 ) tmp ON af.authorID = tmp.authorID
 SET af.PaperCount_field = tmp.count_papers;
@@ -57,7 +57,7 @@ JOIN (
     SELECT PA.authorID, SUM(P.citationCount) as total_citations
     FROM papers_field as P 
     JOIN paper_author_field as PA on P.paperID = PA.paperID 
-    WHERE P.CitationCount >= 0 AND PA.{filterCondition}
+    WHERE P.CitationCount >= 0 AND PA.{repeatCondition}
     GROUP BY PA.authorID
 ) tmp ON af.authorID = tmp.authorID
 SET af.CitationCount_field = tmp.total_citations;
@@ -70,7 +70,7 @@ SET af.CitationCount_field = tmp.total_citations;
 # 以反映其影响力和论文引用分布情况。
 #######################################################################
 # process each author
-filterCondition = "PaperCount_field > 20"
+filterCondition = os.environ.get('filterCondition', 'PaperCount_field > 20')
 authorID_list = pd.read_sql(f"SELECT authorID FROM authors_field WHERE {filterCondition}", conn)['authorID'].tolist()
 
 for authorID in tqdm(authorID_list):

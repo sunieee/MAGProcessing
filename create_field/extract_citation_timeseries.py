@@ -6,6 +6,7 @@ from utils import *
 import multiprocessing
 import math
 import numpy as np
+import concurrent.futures
 import json
 
 ''' 等价mysql命令，但是效率更高
@@ -36,7 +37,8 @@ paper_reference.columns = ['paperID', 'citingpaperID']
 paperID_list = paper_reference['paperID'].unique().tolist() + paper_reference['citingpaperID'].unique().tolist()
 paperID_list = list(set(paperID_list))
 
-def extract_paper_year(paperID_list):
+def extract_paper_year(pair):
+    paperID_list, order = pair
     conn = pymysql.connect(host='localhost',
                             port=3306,
                             user='root',
@@ -44,6 +46,7 @@ def extract_paper_year(paperID_list):
                             db=database,
                             charset='utf8')
     cursor = conn.cursor()
+    print(f'* extracting paper year: {order}')
     # 使用IN子句一次查询多个paperID
     macg_papers = pd.read_sql_query(f"""select paperID, year(PublicationDate) as year from MACG.papers 
                                 where paperID in {tuple(paperID_list)}""", engine)
@@ -59,10 +62,10 @@ if os.path.exists(f'out/{database}/paperID2year.json'):
 else:
     paperID2year = {}
     multiproces_num = 20
-    group_size = 1000
+    group_size = 2000
     group_length = math.ceil(len(paperID_list)/group_size)
     with multiprocessing.Pool(processes=multiproces_num) as pool:
-        results = pool.map(extract_paper_year, [paperID_list[i*group_size:(i+1)*group_size] for i in range(group_length)])
+        results = pool.map(extract_paper_year, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
         for result in results:
             paperID2year.update(result)
     print('extract paper year done', len(paperID2year))
@@ -95,23 +98,41 @@ print('processing each citation count')
 MIN_YEAR = 1901
 MAX_YEAR = MAX_CITATION_YEAR = 2022
 
-for i in tqdm(range(len(papers_field_citation_timeseries_raw))):
-    row = papers_field_citation_timeseries_raw.iloc[i]
-    paperID = str(row['paperID'].strip())
-    year = int(row['year'])
+range(len(papers_field_citation_timeseries_raw))
 
-    if (year < MIN_YEAR) or (year > MAX_YEAR):
-        print("citation year out of range: ", year, ", paper ID: ", paperID)
-        continue
+def extract_citationCountMap(pair):
+    idx_list, order = pair
+    print(f'* extracting citationCountMap: {order}')
+    citationCountMap = {}
+    for i in tqdm(idx_list):
+        row = papers_field_citation_timeseries_raw.iloc[i]
+        paperID = str(row['paperID'].strip())
+        year = int(row['year'])
 
-    if not (paperID in citationCountMap):
-        citationCountMap[paperID] = {}
-    citationCountMap[paperID][year] = int(row['cited_cnt'])
+        if (year < MIN_YEAR) or (year > MAX_YEAR):
+            print("citation year out of range: ", year, ", paper ID: ", paperID)
+            continue
 
+        if not (paperID in citationCountMap):
+            citationCountMap[paperID] = {}
+        citationCountMap[paperID][year] = int(row['cited_cnt'])
+
+group_size = 10000
+multiproces_num = 20
+group_length = math.ceil(len(papers_field_citation_timeseries_raw)/group_size)
+with multiprocessing.Pool(processes=multiproces_num) as pool:
+    results = pool.map(extract_citationCountMap, [(range(i*group_size, (i+1)*group_size), f'{i}/{group_length}') for i in range(group_length)])
+    for result in results:
+        for k, v in result.items():
+            if k not in citationCountMap:
+                citationCountMap[k] = v
+            else:
+                citationCountMap[k].update(v)
 
 print('inserting into papers_field_citation_timeseries')
 
-def insert_citation_timeseries(paperID_list):
+def insert_citation_timeseries(pair):
+    paperID_list, order = pair
     conn = pymysql.connect(host='localhost',
                             port=3306,
                             user='root',
@@ -119,8 +140,8 @@ def insert_citation_timeseries(paperID_list):
                             db=database,
                             charset='utf8')
     cursor = conn.cursor()
+    print(f'* inserting into papers_field_citation_timeseries: {order}')
     for paperID in tqdm(paperID_list):
-
         if paperID2year.get(paperID, 0) == 0 or np.isnan(paperID2year[paperID]):
             print("paper year not valid: ", paperID, paperID2year.get(paperID, 0))
             continue
@@ -172,7 +193,7 @@ group_size = 10000
 paperID_list = list(citationCountMap.keys())
 group_length = math.ceil(len(paperID_list)/group_size)
 with multiprocessing.Pool(processes=multiproces_num) as pool:
-    results = pool.map(insert_citation_timeseries, [paperID_list[i*group_size:(i+1)*group_size] for i in range(group_length)])
+    results = pool.map(insert_citation_timeseries, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
 
 ####################################################################################
 # update papers_field

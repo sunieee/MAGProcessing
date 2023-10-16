@@ -356,3 +356,22 @@ pymysql.err.OperationalError: (1206, 'The total number of locks exceeds the lock
 ```
 
 可能是由于 MACG_papers 和 MACG_papers_tmpid 这两个表的连接导致了锁表的数量超过了 MySQL 的限制。这可能是因为 MACG_papers_tmpid 是一个中间结果表，可能包含了大量的数据，而连接操作需要占用一定数量的锁。将sql操作改为pandas.Dataframe操作，不再报错
+
+
+# 进程与线程
+
+1. 进程不能传递pbar（只能传递可序列化的变量），不能使用进度条，否则出错TypeError: cannot pickle '_io.TextIOWrapper' object
+2. 多线程即使将max_worker设置为 20，也无法跑满全部mysql，利用率在100%左右。整体上弱于多进程
+3. 必须在多进程和多线程函数内部创建mysql链接，否则会有进程锁
+4. 不能使用可变全局变量，只能使用只读全局变量
+
+```
+pbar = tqdm(total=group_num)
+params = [(data[i*GROUP_SIZE:(i+1)*GROUP_SIZE], i, pbar) for i in range(group_num)]
+with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num * 5) as executor:
+    results = executor.map(_query, params)
+
+with multiprocessing.Pool(processes=multiproces_num) as pool:
+    results = pool.map(extract_paper_year, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
+```
+

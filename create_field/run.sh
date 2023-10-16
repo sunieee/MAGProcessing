@@ -12,7 +12,8 @@ python extract_scigene_field.py > out/$database/extract_scigene_field.log
 python extract_citation_timeseries.py > out/$database/extract_citation_timeseries.log
 # python set_fellow.py $2
 
-python match_author.py
+export filterCondition='PaperCount_field > 20'
+python match_author.py > out/$database/match_author.log
 
 # out/{database}/groups.csv 是所有pair
 # out/{database}/match.csv 是按照条件筛选后的pair

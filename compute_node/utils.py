@@ -7,15 +7,14 @@ from tqdm import tqdm
 import math
 import json
 import multiprocessing
-
+import pandas as pd
 
 database = os.environ.get('database', 'scigene_visualization_field')
-database_pcg = database + "_pcg"
 # numOfTopAuthors = os.environ.get('numOfTopAuthors', 1100)
 # numOfTopAuthors = int(numOfTopAuthors)
 
 multiproces_num = 20
-filterCondition = f"PaperCount_field > 10"
+filterCondition = os.environ.get('filterCondition', f"PaperCount_field > 20")
 # select exact top field authors
 
 
@@ -54,8 +53,8 @@ def init_connection(database):
 
         return create_connection(database)
     
-conn, cursor = init_connection(database_pcg)
-engine = create_engine(f"mysql+pymysql://root:root@192.168.0.140:3306/{database_pcg}?charset=utf8")
+conn, cursor = init_connection(database)
+engine = create_engine(f"mysql+pymysql://root:root@192.168.0.140:3306/{database}?charset=utf8")
 
 
 # 当你使用pymysql直接创建的连接，它返回的是一个原生的MySQL连接，
@@ -92,11 +91,25 @@ def executeFetch(sql, cursor=cursor):
     return rows
 
 
-authors_rows = executeFetch(f"""
-select authorID, name, authorRank, PaperCount_field 
-    from {database}.authors_field
-    where {filterCondition} order by authorID;""")
-authorID_list = [row[0] for row in authors_rows]
+# authors_rows = executeFetch(f"""
+# select authorID, name, PaperCount_field 
+#     from {database}.authors_field
+#     where {filterCondition} order by authorID;""")
+# authorID_list = [row[0] for row in authors_rows]
+
+top_field_authors_path = f'out/{database}/top_field_authors.csv'
+
+if os.path.exists(top_field_authors_path):
+    print('top_field_authors.csv exists')
+    top_field_authors_df = pd.read_csv(top_field_authors_path)
+else:
+    print('top_field_authors.csv not exists')
+    top_field_authors_df = pd.read_sql(f"""select * from authors_field
+        where {filterCondition}""", conn)
+    top_field_authors_df.to_csv(top_field_authors_path, index=False)
+
+top_field_authors_df['authorID'] = top_field_authors_df['authorID'].astype(str)
+authorID_list = top_field_authors_df['authorID'].tolist()
 
 
 def try_execute(sql, cursor=cursor):

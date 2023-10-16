@@ -57,7 +57,7 @@ def extract_paper_abstract(pairs):
     # 使用IN子句一次查询多个paperID
     paper_ids_str = ', '.join(map(str, papers))
     cursor.execute(f"""SELECT paperID, abstract
-                       FROM papers_field 
+                       FROM MACG.abstracts 
                        WHERE paperID IN ({paper_ids_str})
                        ORDER BY paperID;""")
     result = cursor.fetchall()
