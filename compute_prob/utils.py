@@ -121,25 +121,25 @@ authorID_list = top_field_authors_df['authorID'].tolist()
 
 
 print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S"))
-path_to_csv = f"out/{database}/csv"
-if not os.path.exists(path_to_csv):
-    os.makedirs(path_to_csv)
+path_to_mapping = f"out/{database}/csv"
+if not os.path.exists(path_to_mapping):
+    os.makedirs(path_to_mapping)
     df_paper_author_field = pd.read_sql_query(f"select * from paper_author_field", conn)
-    df_paper_author_field.to_csv(f"{path_to_csv}/paper_author_field.csv", index=False)
+    df_paper_author_field.to_csv(f"{path_to_mapping}/paper_author_field.csv", index=False)
     
     df_papers_field = pd.read_sql_query(f"select * from papers_field", conn)
-    df_papers_field.to_csv(f"{path_to_csv}/papers_field.csv", index=False)
+    df_papers_field.to_csv(f"{path_to_mapping}/papers_field.csv", index=False)
 
     df_authors_field = pd.read_sql_query(f"select * from authors_field", conn)
-    df_authors_field.to_csv(f"{path_to_csv}/authors_field.csv", index=False)
+    df_authors_field.to_csv(f"{path_to_mapping}/authors_field.csv", index=False)
 
     df_paper_reference_field = pd.read_sql_query(f"select * from paper_reference_field", conn)
-    df_paper_reference_field.to_csv(f"{path_to_csv}/paper_reference_field.csv", index=False)
+    df_paper_reference_field.to_csv(f"{path_to_mapping}/paper_reference_field.csv", index=False)
 else:
-    df_paper_author_field = pd.read_csv(f"{path_to_csv}/paper_author_field.csv")
-    df_papers_field = pd.read_csv(f"{path_to_csv}/papers_field.csv")
-    df_authors_field = pd.read_csv(f"{path_to_csv}/authors_field.csv")
-    df_paper_reference_field = pd.read_csv(f"{path_to_csv}/paper_reference_field.csv")
+    df_paper_author_field = pd.read_csv(f"{path_to_mapping}/paper_author_field.csv")
+    df_papers_field = pd.read_csv(f"{path_to_mapping}/papers_field.csv")
+    df_authors_field = pd.read_csv(f"{path_to_mapping}/authors_field.csv")
+    df_paper_reference_field = pd.read_csv(f"{path_to_mapping}/paper_reference_field.csv")
 
     df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
     df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
@@ -180,30 +180,4 @@ nodes = tuple(nodes.drop_duplicates().values)
 print('nodes:', len(nodes), 'edges:', len(edges))
 
 
-def extract_paper_abstract(pairs):
-    papers, info = pairs
-    print('extract_paper_abstract', len(papers), info)
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db='MACG',
-                            charset='utf8')
-    cursor = conn.cursor()
-    _paperID2abstract = defaultdict(str)
 
-    # 使用IN子句一次查询多个paperID
-    paper_ids_str = ', '.join(map(str, papers))
-    cursor.execute(f"""SELECT paperID, abstract
-                       FROM abstracts 
-                       WHERE paperID IN ({paper_ids_str})
-                       ORDER BY paperID;""")
-    result = cursor.fetchall()
-
-    # 使用Python代码来组合结果
-    for paperID, abstract in result:
-        _paperID2abstract[paperID] = abstract
-
-    cursor.close()
-    conn.close()
-    return _paperID2abstract

@@ -10,14 +10,10 @@ export database=scigene_database_field
 export filterCondition='PaperCount_field > 20'
 
 rm -rf out/$database
-mkdir -p out/$database/map
 mkdir -p out/$database/papers
 
-
 # compute node
-python create_mapping.py > out/$database/create_mapping.log
-# python create_local_mapping.py > out/$database/create_local_mapping.log
-python compute_key_papers.py > out/$database/compute_top_author_key_papers.log
+python compute_key_papers.py > out/$database/compute_key_papers.log
 
 
 # compute edge

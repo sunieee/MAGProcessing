@@ -22,6 +22,33 @@ x_train = []
 # read all the selected papers in MAG
 db_suffix = 'ARC' if database=="scigene_acl_anthology" else 'field'
 
+def extract_paper_abstract(pairs):
+    papers, info = pairs
+    print('extract_paper_abstract', len(papers), info)
+    conn = pymysql.connect(host='localhost',
+                            port=3306,
+                            user='root',
+                            password='root',
+                            db='MACG',
+                            charset='utf8')
+    cursor = conn.cursor()
+    _paperID2abstract = defaultdict(str)
+
+    # 使用IN子句一次查询多个paperID
+    paper_ids_str = ', '.join(map(str, papers))
+    cursor.execute(f"""SELECT paperID, abstract
+                       FROM abstracts 
+                       WHERE paperID IN ({paper_ids_str})
+                       ORDER BY paperID;""")
+    result = cursor.fetchall()
+
+    # 使用Python代码来组合结果
+    for paperID, abstract in result:
+        _paperID2abstract[paperID] = abstract
+
+    cursor.close()
+    conn.close()
+    return _paperID2abstract
 
 if os.path.exists(f"out/{database}/paperID2abstract.json"):
     with open(f"out/{database}/paperID2abstract.json") as f:
@@ -30,18 +57,21 @@ else:
     paperID2abstract = defaultdict(str)
     multiproces_num = 20
     group_size = 2000
+    group_length = math.ceil(len(nodes)/group_size)
     with multiprocessing.Pool(processes=multiproces_num) as pool:
-        results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
+        results = pool.map(extract_paper_abstract, [(nodes[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
         for result in results:
             paperID2abstract.update(result)
     print('finish extract_paper_abstract', len(paperID2abstract))
     with open(f"out/{database}/paperID2abstract.json", 'w') as f:
         json.dump(paperID2abstract, f)
 
-db = pd.read_csv(f'../create_field/out/{database}/papers.csv')
+db = pd.read_csv(f'out/{database}/csv/papers_field.csv')
+db['paperID'] = db['paperID'].astype(str)
 db = db[db['paperID'].isin(nodes)]
 db['abstract'] = db['paperID'].map(paperID2abstract)
 db = db[['paperID', 'title', 'abstract']]
+db.reset_index(drop=True, inplace=True)
 
 # db = pd.read_sql_query(f'''select paperID, title, abstract 
 #                         from papers_{db_suffix}

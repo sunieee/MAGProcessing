@@ -99,13 +99,13 @@ for _, row in grouped.iterrows():
 
 
 # save all the maps to {path_to_csv}/*.json
-with open(f"{path_to_csv}/firstAuthorPaperCountMap.json", "w") as f:
+with open(f"{path_to_mapping}/firstAuthorPaperCountMap.json", "w") as f:
     json.dump(firstAuthorPaperCountMap, f)
-with open(f"{path_to_csv}/firstAuthorWeightedPaperCountMap.json", "w") as f:
+with open(f"{path_to_mapping}/firstAuthorWeightedPaperCountMap.json", "w") as f:
     json.dump(firstAuthorWeightedPaperCountMap, f)
-with open(f"{path_to_csv}/coAuthorWeightedPaperCountMap.json", "w") as f:
+with open(f"{path_to_mapping}/coAuthorWeightedPaperCountMap.json", "w") as f:
     json.dump(coAuthorWeightedPaperCountMap, f)
-with open(f"{path_to_csv}/coAuthorPaperCountMap.json", "w") as f:
+with open(f"{path_to_mapping}/coAuthorPaperCountMap.json", "w") as f:
     json.dump(coAuthorPaperCountMap, f)
-with open(f"{path_to_csv}/topAuthorPaperCountMap.json", "w") as f:
+with open(f"{path_to_mapping}/topAuthorPaperCountMap.json", "w") as f:
     json.dump(topAuthorPaperCountMap, f)

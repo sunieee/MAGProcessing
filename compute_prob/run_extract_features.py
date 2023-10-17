@@ -207,16 +207,13 @@ def get_values_from_index(df, index, column_name):
 
 # 6 correlation features
 timeseries_df = pd.read_sql_query(f"""select citeStartYear, citeEndYear, totalCitationCount, citationCountByYear, paperID 
-                                  from {citation_timeseries_table}
+                                  from papers_field_citation_timeseries
                                   where paperID in {nodes}""", engine)
 timeseries_df['paperID'] = timeseries_df['paperID'].astype(str)
 
 # 5 other features
-papers_df = pd.read_sql_query(f"""select * from papers_field where paperID in {nodes};""", engine)
-papers_df['paperID'] = papers_df['paperID'].astype(str)
-
-paper_author_df = pd.read_sql_query(f"""select * from paper_author_field where paperID in {nodes};""", engine)
-paper_author_df['paperID'] = paper_author_df['paperID'].astype(str)
+papers_df = df_papers_field[df_papers_field['paperID'].isin(nodes)]
+paper_author_df = df_paper_author_field[df_paper_author_field['paperID'].isin(nodes)]
 
 similarity_df = pd.read_csv(f'out/{database}/similarity_features.csv')
 similarity_df.pop('title')

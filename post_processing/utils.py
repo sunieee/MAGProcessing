@@ -21,8 +21,7 @@ edge_df['citingpaperID'] = edge_df['citingpaperID'].astype(str)
 edge_df['citedpaperID'] = edge_df['citedpaperID'].astype(str)
 edge_df['authorID'] = edge_df['authorID'].astype(str)
 
-paper_dir = f'out/{database}/papers'
-link_dir = f'out/{database}/links'
+
 
 engine = create_engine(f"mysql+pymysql://root:root@localhost:3306/{database}?charset=utf8")
 conn = pymysql.connect(host='localhost',

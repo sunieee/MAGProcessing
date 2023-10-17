@@ -6,8 +6,11 @@ from tqdm import tqdm
 import multiprocessing
 from collections import defaultdict
 import math
+import datetime
+import json
 
-
+paper_dir = f'out/{database}/papers_unprocessed'
+link_dir = f'out/{database}/links'
 file_list = os.listdir(paper_dir)
 
 def extract_paper_authors(pairs):
@@ -110,27 +113,28 @@ for file in tqdm(file_list):
     papers['paperID'] = papers['paperID'].astype(str)
     paperID_list += papers["paperID"].values.tolist()
 paperID_list = list(set(paperID_list))
+print('len(paperID_list)', len(paperID_list), datetime.datetime.now().strftime('%H:%M:%S'))
 
 multiproces_num = 20
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_venu, [paperID_list[i::multiproces_num] for i in range(multiproces_num)])
     for result in results:
         paperID2venue.update(result)
-        
+print('finish extract_paper_venu', len(paperID2venue), datetime.datetime.now().strftime('%H:%M:%S'))
+
 group_size = 2000
 group_length = math.ceil(len(paperID_list)/group_size)
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_authors, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
     for result in results:
         paperID2authorsName.update(result)
-print('finish extract_paper_authors', len(paperID2authorsName))
-print(paperID2abstract)
+print('finish extract_paper_authors', len(paperID2authorsName), datetime.datetime.now().strftime('%H:%M:%S'))
 
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
     for result in results:
         paperID2abstract.update(result)
-print('finish extract_paper_abstract', len(paperID2abstract))
+print('finish extract_paper_abstract', len(paperID2abstract), datetime.datetime.now().strftime('%H:%M:%S'))
 
 def extract_paper(file):
     filepath = os.path.join(paper_dir, file)
@@ -141,7 +145,7 @@ def extract_paper(file):
     papers['authorsName'] = papers['paperID'].apply(lambda paperID: paperID2authorsName[paperID])
     papers['abstract'] = papers['paperID'].apply(lambda paperID: paperID2abstract[paperID])
 
-    papers.to_csv(filepath.replace('papers', 'new_papers'), index=False)
+    papers.to_csv(filepath.replace('_unprocessed', ''), index=False)
 
 multiproces_num = 20
 with multiprocessing.Pool(processes=multiproces_num) as pool:
