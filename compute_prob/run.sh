@@ -7,13 +7,13 @@ set -e
 
 # export database=scigene_visualization_field
 export database=scigene_database_field
-export filterCondition='PaperCount_field > 20'
+export filterCondition='PaperCount_field > 20 or hIndex_field >= 9'
 
-rm -rf out/$database
+# rm -rf out/$database
 mkdir -p out/$database/papers
 
 # compute node
-python compute_key_papers.py > out/$database/compute_key_papers.log
+# python compute_key_papers.py > out/$database/compute_key_papers.log
 
 
 # compute edge

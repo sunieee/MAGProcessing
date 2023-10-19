@@ -6,8 +6,6 @@ import datetime
 
 
 MIN_STUDENT_AUTHOR_ORDER = 3
-df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
-
 print("Pre-compute first author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
 firstAuthorTmp = df_paper_author_field_filtered.merge(df_paper_author_field, on="paperID", suffixes=('', '_first')) \
     .query("authorOrder > 1 and authorOrder_first == 1") 

@@ -151,13 +151,13 @@ else:
 
 # 直接从paper_reference_field表中筛选出自引的记录
 print('creating node & edges', datetime.datetime.now().strftime("%H:%M:%S"))
+df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
+df_paper_author_field_filtered = df_paper_author_field_filtered[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
+
 if not os.path.exists(f'out/{database}/edges.csv'):
     print('edges.csv not found, creating self-reference graph...')
     t = time.time()
-    # 使用两次 merge 来模拟 SQL 中的 join 操作
-    df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
-    df_paper_author_field_filtered = df_paper_author_field_filtered[['paperID', 'authorID']].drop_duplicates()
-
+    # 使用两次 merge 来模拟 SQL 中的 join 操作    
     merged_df1 = df_paper_reference_field.merge(df_paper_author_field_filtered, left_on='citingpaperID', right_on='paperID')
     merged_df2 = merged_df1.merge(df_paper_author_field_filtered.rename(columns={'authorID': 'authorID2', 'paperID': 'paperID2'}), 
                                     left_on='citedpaperID', right_on='paperID2')
@@ -177,7 +177,12 @@ edges_by_cited = edges.set_index('citedpaperID')
 
 nodes = pd.concat([edges['citingpaperID'], edges['citedpaperID']])
 nodes = tuple(nodes.drop_duplicates().values)
-print('nodes:', len(nodes), 'edges:', len(edges))
+print('#nodes:', len(nodes), '#edges:', len(edges))
 
+paperID_list = df_paper_author_field_filtered['paperID'].drop_duplicates().tolist()
+print('#paperID_list:', len(paperID_list))
 
-
+with open(f"out/{database}/nodes.txt", 'w') as f:
+    f.write('\n'.join(nodes))
+with open(f"out/{database}/paperID_list.txt", 'w') as f:
+    f.write('\n'.join(paperID_list))

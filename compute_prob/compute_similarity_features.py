@@ -7,12 +7,26 @@ from nltk.corpus import stopwords
 import ssl
 import numpy as np
 from gensim import utils
-from utils import *
 import json
+import os
+from collections import defaultdict
+import pymysql
+import math
+import multiprocessing
+import time
+from tqdm import tqdm
 
 # run before
 # nltk.download('stopwords')
 x_train = []
+database = os.environ.get('database', 'scigene_visualization_field')
+
+with open(f'out/{database}/nodes.txt', 'r') as f:
+    nodes = f.read().split()
+
+with open(f'out/{database}/paperID_list.txt', 'r') as f:
+    paperID_list = f.read().split()
+
 
 ############################################################
 # 实际上，你只需要训练Doc2Vec模型一次。
@@ -35,11 +49,11 @@ def extract_paper_abstract(pairs):
     _paperID2abstract = defaultdict(str)
 
     # 使用IN子句一次查询多个paperID
-    paper_ids_str = ', '.join(map(str, papers))
-    cursor.execute(f"""SELECT paperID, abstract
-                       FROM abstracts 
-                       WHERE paperID IN ({paper_ids_str})
-                       ORDER BY paperID;""")
+    # 这个太重要了！！！！！！！ paperID一定要加引号，不然慢1w倍，1s变成10h
+    paper_ids_str = ', '.join([f"'{x}'" for x in papers])
+    sql = f"""SELECT paperID, abstract FROM abstracts WHERE paperID IN ({paper_ids_str}) ;"""
+    # print('*', sql)
+    cursor.execute(sql)
     result = cursor.fetchall()
 
     # 使用Python代码来组合结果
@@ -56,10 +70,10 @@ if os.path.exists(f"out/{database}/paperID2abstract.json"):
 else:
     paperID2abstract = defaultdict(str)
     multiproces_num = 20
-    group_size = 2000
-    group_length = math.ceil(len(nodes)/group_size)
-    with multiprocessing.Pool(processes=multiproces_num) as pool:
-        results = pool.map(extract_paper_abstract, [(nodes[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
+    group_size = 1000
+    group_length = math.ceil(len(paperID_list)/group_size)
+    with multiprocessing.Pool(processes=multiproces_num * 3) as pool:
+        results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
         for result in results:
             paperID2abstract.update(result)
     print('finish extract_paper_abstract', len(paperID2abstract))
