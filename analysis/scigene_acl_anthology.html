@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Author Visualization</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+        #container {
+            display: flex;
+        }
+
+        /* 滚动槽 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            border-radius: 3px;
+            background: rgba(0,0,0,0.06);
+            -webkit-box-shadow: inset 0 0 5px rgba(0,0,0,0.08);
+        }
+        ::-webkit-scrollbar-thumb {
+            border-radius: 3px;
+            background: rgba(0,0,0,0.12);
+            -webkit-box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        #authorTable {
+            width: 30%;
+            margin-right: 2%;
+            border-collapse: collapse;
+        }
+
+        #authorTable thead, #authorTable tbody {
+            display: block;
+        }
+
+        #authorTable thead tr, #authorTable tbody tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        #authorTable tbody {
+            max-height: 1000px;  /* Adjust this value as per your requirement */
+            overflow-y: auto;
+        }
+
+
+        #authorTable th, #authorTable td {
+            width: 20%;
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        #authorTable tr:hover {
+            background-color: #f5f5f5;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #graphs {
+            width: 40%;
+        }
+
+        #indegree, #outdegree, #totaldegree {
+            width: 600px;
+            height: 350px;
+        }
+
+        #indegree-r, #outdegree-r, #totaldegree-r {
+            width: 600px;
+            height: 350px;
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(255, 255, 255, 0.8); /* White background with opacity */
+            z-index: 1000; /* Ensure it's on top of other content */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner {
+            border: 16px solid #f3f3f3; /* Light grey */
+            border-top: 16px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div id="loadingIndicator" class="loading-overlay">
+    <div class="spinner"></div>
+</div>
+<div id="container">
+    <table id="authorTable">
+        <thead>
+            <tr>
+                <th></th>
+                <th>authorID</th>
+                <th>PaperCount</th>
+                <th>authorRank</th>
+                <th>fellow</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data will be populated using D3.js -->
+        </tbody>
+    </table>
+
+    <div id="graphs">
+        <!-- Add filters for node_prob and edge_prob -->
+        <div id="filters">
+            Node Probability: <input type="range" id="nodeProbSlider" value="0.5" step="0.01" min="0" max="1" oninput="updateValue('nodeProbValue', this.value)">
+            <span id="nodeProbValue">0.5</span>
+            Edge Probability: <input type="range" id="edgeProbSlider" value="0.3" step="0.01" min="0" max="1" oninput="updateValue('edgeProbValue', this.value)">
+            <span id="edgeProbValue">0.3</span>
+        </div>
+        <br>
+
+        <!-- Add divs for your D3 visualizations -->
+        <div id="indegree"></div>
+        <div id="outdegree"></div>
+        <div id="totaldegree"></div>
+    
+        <!-- ... (rest of the divs for the charts) ... -->
+    </div>
+
+    <div id="graphs-r">
+        <!-- Add filters for node_prob and edge_prob -->
+        <div id="fellowFilter">
+            Fellow Filter: <input type="text" id="fellowInput" value=":">
+            <button onclick="filterByFellow()">Display All Fellow</button>
+        </div>
+        <br>
+
+        <!-- Add divs for your D3 visualizations -->
+        <div id="indegree-r"></div>
+        <div id="outdegree-r"></div>
+        <div id="totaldegree-r"></div>
+    
+        <!-- ... (rest of the divs for the charts) ... -->
+    </div>
+</div>
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.2.2/echarts.min.js"></script>
+
+<script>
+
+let allAuthorsData = [];
+let authorIDs_global = [];
+
+d3.csv("out/scigene_acl_anthology/top_field_authors.csv").then(data => {
+    allAuthorsData = data;
+
+    let table = d3.select("#authorTable").select("tbody");
+    let rows = table.selectAll("tr")
+        .data(data)
+        .enter().append("tr")
+        .on("click", function(d) {
+            let checkbox = d3.select(this).select("input").node();
+            checkbox.checked = !checkbox.checked;
+            rowClicked(d.authorID, checkbox.checked);
+        });
+
+    rows.append("td")
+        .append("input")
+        .attr("type", "checkbox");
+
+    rows.selectAll("td.data")
+        .data(function(d) {
+            return [d.authorID, d.PaperCount_field, d.authorRank, d.fellow];
+        })
+        .enter().append("td")
+        .attr("class", "data")
+        .text(function(d) {
+            return d;
+        });
+    
+    let authorIDs = data.map(d=>d.authorID);
+    console.log('all authors', authorIDs)
+    authorIDs_global = authorIDs;
+    loadMultipleAuthorsData(authorIDs);
+
+});
+
+function filterByFellow() {
+    let fellowFilter = document.getElementById("fellowInput").value;
+    console.log('filter value:', fellowFilter)
+    selectedAuthors = allAuthorsData.filter(author => author.fellow.includes(fellowFilter)).map(author => author.authorID);
+    
+    // Highlight the rows in the table that match the filter
+    d3.select("#authorTable").selectAll("tr").each(function(d) {
+        if (!d) return;
+        console.log(d)
+        let row = d3.select(this);
+        let checkbox = row.select("input").node();
+        if (selectedAuthors.includes(d.authorID)) {
+            checkbox.checked = true;
+            row.style.backgroundColor = "#e0e0e0";  // Highlight color
+        } else {
+            checkbox.checked = false;
+            row.style.backgroundColor = "";  // Reset color
+        }
+    });
+
+    loadMultipleAuthorsData(selectedAuthors);
+}
+
+
+let selectedAuthors = [];
+let nodeProbFilter = 0.5;
+let edgeProbFilter = 0.3;
+let frequency_global = {};
+
+
+function updateValue(spanId, value) {
+    document.getElementById(spanId).textContent = value;
+    nodeProbFilter = parseFloat(document.getElementById("nodeProbSlider").value);
+    edgeProbFilter = parseFloat(document.getElementById("edgeProbSlider").value);
+    loadMultipleAuthorsData(selectedAuthors);
+}
+
+function rowClicked(authorID, isChecked) {
+    if (isChecked) {
+        selectedAuthors.push(authorID);
+    } else {
+        const index = selectedAuthors.indexOf(authorID);
+        if (index > -1) {
+            selectedAuthors.splice(index, 1);
+        }
+    }
+    loadMultipleAuthorsData(selectedAuthors);
+}
+
+function computeFrequency(data) {
+    let frequency = {};
+    data.forEach(value => {
+        if (frequency[value]) {
+            frequency[value]++;
+        } else {
+            frequency[value] = 1;
+        }
+    });
+    return frequency;
+}
+
+function drawDistributionChart(elementId, frequency, titleText) {
+    // let frequency = computeFrequency(data);
+    let xAxisData = Object.keys(frequency);
+    let yAxisData = Object.values(frequency);
+
+    console.log(titleText, frequency)
+
+    let option = {
+        title: {
+            text: titleText
+        },
+        tooltip: {},
+        xAxis: {
+            name: 'Degree',
+            type: 'category',
+            data: xAxisData
+        },
+        yAxis: {
+            name: 'Number of Nodes'
+        },
+        series: [{
+            type: 'bar',
+            data: yAxisData
+        }]
+    };
+
+    let chart = echarts.init(document.getElementById(elementId));
+    chart.setOption(option);
+
+    let chart_r = echarts.init(document.getElementById(elementId + '-r'));
+    let frequency_r = JSON.parse(JSON.stringify(frequency_global[elementId]));
+    for (let key in frequency) {
+        frequency_r[key] -= frequency[key];
+        if (frequency_r[key] == 0) {
+            delete frequency_r[key];
+        }
+    }
+    option_r = {
+        title: {
+            text: titleText + ' (Reverse)'
+        },
+        tooltip: {},
+        xAxis: {
+            name: 'Degree',
+            type: 'category',
+            data: Object.keys(frequency_r)
+        },
+        yAxis: {
+            name: 'Number of Nodes'
+        },
+        series: [{
+            type: 'bar',
+            data: Object.values(frequency_r)
+        }]
+    };
+    chart_r.setOption(option_r);
+}
+
+function loadMultipleAuthorsData(authorIDs) {
+    let promises = authorIDs.map(id => d3.json(`out/scigene_acl_anthology/${id}.json`));
+    document.getElementById("loadingIndicator").style.display = "flex";
+
+    Promise.all(promises).then(datas => {
+        let combinedData = {
+            edges: [],
+            nodes: {}
+        };
+
+        datas.forEach(data => {
+            combinedData.edges.push(...data.edges);
+            for (let node in data.nodes) {
+                if (combinedData.nodes[node]) {
+                    combinedData.nodes[node] += data.nodes[node];
+                } else {
+                    combinedData.nodes[node] = data.nodes[node];
+                }
+            }
+        });
+
+        // Filter nodes and edges based on given probabilities
+        let filteredNodes = Object.keys(combinedData.nodes).filter(key => combinedData.nodes[key] > nodeProbFilter);
+        let filteredEdges = combinedData.edges.filter(edge => edge.prob > edgeProbFilter);
+
+        // Compute indegree, outdegree, and total degree
+        let indegree = {}, outdegree = {}, totaldegree = {};
+        filteredEdges.forEach(edge => {
+            if (!filteredNodes.includes(edge.source) || !filteredNodes.includes(edge.target)) {
+                return;
+            }
+            outdegree[edge.source] = (outdegree[edge.source] || 0) + 1;
+            indegree[edge.target] = (indegree[edge.target] || 0) + 1;
+        });
+        Object.keys(indegree).forEach(key => {
+            totaldegree[key] = (totaldegree[key] || 0) + indegree[key];
+        });
+        Object.keys(outdegree).forEach(key => {
+            totaldegree[key] = (totaldegree[key] || 0) + outdegree[key];
+        });
+
+        // Visualize using ECharts
+        let indegreeData = computeFrequency(Object.values(indegree));
+        let outdegreeData = computeFrequency(Object.values(outdegree));
+        let totaldegreeData = computeFrequency(Object.values(totaldegree));
+
+        if (authorIDs == authorIDs_global) {
+            frequency_global = {
+                'indegree': indegreeData,
+                'outdegree': outdegreeData,
+                'totaldegree': totaldegreeData
+            };
+            console.log('all authors frequency_global', frequency_global)
+        }
+
+        drawDistributionChart('indegree', indegreeData, 'In-degree Distribution');
+        drawDistributionChart('outdegree', outdegreeData, 'Out-degree Distribution');
+        drawDistributionChart('totaldegree', totaldegreeData, 'Total Degree Distribution');
+        document.getElementById("loadingIndicator").style.display = "none";
+    });
+}
+</script>
+</script>
+</body>
+</html>

@@ -13,7 +13,7 @@ export filterCondition='PaperCount_field > 20 or hIndex_field >= 9'
 mkdir -p out/$database/papers
 
 # compute node
-# python compute_key_papers.py > out/$database/compute_key_papers.log
+python compute_key_papers.py > out/$database/compute_key_papers.log
 
 
 # compute edge
