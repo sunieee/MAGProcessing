@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Author Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/simple-statistics@7.7.0/dist/simple-statistics.min.js"></script>
     <script src="https://d3js.org/d3.v5.min.js"></script>
+
     <style>
         #container {
             display: flex;
@@ -74,6 +76,13 @@
             height: 350px;
         }
 
+        .title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
         .loading-overlay {
             display: none;
             position: fixed;
@@ -97,6 +106,10 @@
             animation: spin 2s linear infinite;
         }
 
+        .filters {
+            margin-bottom: 10px;
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -114,7 +127,7 @@
                 <th></th>
                 <th>authorID</th>
                 <th>PaperCount</th>
-                <th>authorRank</th>
+                <th>hIndex</th>
                 <th>fellow</th>
             </tr>
         </thead>
@@ -125,13 +138,18 @@
 
     <div id="graphs">
         <!-- Add filters for node_prob and edge_prob -->
-        <div id="filters">
+        <div class="filters">
             Node Probability: <input type="range" id="nodeProbSlider" value="0.5" step="0.01" min="0" max="1" oninput="updateValue('nodeProbValue', this.value)">
-            <span id="nodeProbValue">0.5</span>
+            <span id="nodeProbValue" style="margin-right: 10px;">0.5</span>
             Edge Probability: <input type="range" id="edgeProbSlider" value="0.3" step="0.01" min="0" max="1" oninput="updateValue('edgeProbValue', this.value)">
             <span id="edgeProbValue">0.3</span>
         </div>
-        <br>
+        <div class="filters">
+            Fellow Filter: <input type="text" id="fellowInput" value="1:">
+            <button onclick="filterByFellow()">Display</button>
+        </div>
+
+        <div id="selectedAuthorsInfo" class="title"></div>
 
         <!-- Add divs for your D3 visualizations -->
         <div id="indegree"></div>
@@ -143,11 +161,21 @@
 
     <div id="graphs-r">
         <!-- Add filters for node_prob and edge_prob -->
-        <div id="fellowFilter">
-            Fellow Filter: <input type="text" id="fellowInput" value=":">
-            <button onclick="filterByFellow()">Display All Fellow</button>
+        <div class="filters">
+            Top hIndex: <input type="range" id="tophIndexSlider" value="200" step="1" min="0" max="1000" oninput="updateTop('tophIndexValue', this.value)">
+            <span id="tophIndexValue" style="margin-right: 10px;">200</span>
+            X-Axis Start: <input type="range" id="xAxisSlider" value="0" step="1" min="0" max="10" oninput="updateXAxis('xAxisValue', this.value)">
+            <span id="xAxisValue">0</span>
         </div>
-        <br>
+        <div class="filters">
+            Fitted Distribution Type:
+            <select id="distributionSelector">
+                <option value="exponential" selected>指数分布</option>
+                <option value="power">幂律分布</option>
+            </select>
+        </div>
+
+        <div id="otherAuthorsInfo" class="title"></div>
 
         <!-- Add divs for your D3 visualizations -->
         <div id="indegree-r"></div>
@@ -163,13 +191,29 @@
 
 let allAuthorsData = [];
 let authorIDs_global = [];
+let selectedAuthors = [];
+let nodeProbFilter = 0.5;
+let edgeProbFilter = 0.3;
+let frequency_global = {};
+let filteredAuthorsData = [];
+let allAuthorsFrequency = new Map();
+let xAxisValue = 0;
+let fittedDistribution = 'exponential';
 
-d3.csv("out/scigene_acl_anthology/top_field_authors.csv").then(data => {
-    allAuthorsData = data;
+
+function updateTitle() {
+    document.getElementById("selectedAuthorsInfo").innerText = "Selected Authors: " + selectedAuthors.length;
+    document.getElementById("otherAuthorsInfo").innerText = "Other Authors: " + (authorIDs_global.length - selectedAuthors.length);
+}
+
+
+function renderAuthorTable() {
+    console.log('rendering author table', filteredAuthorsData)
 
     let table = d3.select("#authorTable").select("tbody");
+    table.selectAll("tr").remove();
     let rows = table.selectAll("tr")
-        .data(data)
+        .data(filteredAuthorsData)
         .enter().append("tr")
         .on("click", function(d) {
             let checkbox = d3.select(this).select("input").node();
@@ -183,7 +227,7 @@ d3.csv("out/scigene_acl_anthology/top_field_authors.csv").then(data => {
 
     rows.selectAll("td.data")
         .data(function(d) {
-            return [d.authorID, d.PaperCount_field, d.authorRank, d.fellow];
+            return [d.authorID, d.PaperCount_field, d.hIndex_field, d.fellow];
         })
         .enter().append("td")
         .attr("class", "data")
@@ -191,22 +235,36 @@ d3.csv("out/scigene_acl_anthology/top_field_authors.csv").then(data => {
             return d;
         });
     
-    let authorIDs = data.map(d=>d.authorID);
+    let authorIDs = filteredAuthorsData.map(d=>d.authorID);
     console.log('all authors', authorIDs)
     authorIDs_global = authorIDs;
-    loadMultipleAuthorsData(authorIDs);
+    updateTitle();
+}
 
+d3.csv("out/scigene_acl_anthology/top_field_authors.csv").then(async(data) => {
+    allAuthorsData = data;
+    // filteredAuthorsData = data.filter(author => author.hIndex_field > 200);
+    // sort by hIndex_field descending
+    allAuthorsData = data.sort((a, b) => b.hIndex_field - a.hIndex_field);
+
+    tophIndexValue = parseInt(document.getElementById("tophIndexSlider").value);
+    //select top tophIndexValue authors
+    filteredAuthorsData = allAuthorsData.slice(0, tophIndexValue);
+    renderAuthorTable();
+    await loadAllAuthorsData();
+    filterByFellow();
 });
 
 function filterByFellow() {
     let fellowFilter = document.getElementById("fellowInput").value;
     console.log('filter value:', fellowFilter)
-    selectedAuthors = allAuthorsData.filter(author => author.fellow.includes(fellowFilter)).map(author => author.authorID);
-    
+    selectedAuthors = filteredAuthorsData.filter(author => author.fellow.includes(fellowFilter)).map(author => author.authorID);
+    updateTitle();
+
     // Highlight the rows in the table that match the filter
     d3.select("#authorTable").selectAll("tr").each(function(d) {
         if (!d) return;
-        console.log(d)
+        // console.log(d)
         let row = d3.select(this);
         let checkbox = row.select("input").node();
         if (selectedAuthors.includes(d.authorID)) {
@@ -218,22 +276,41 @@ function filterByFellow() {
         }
     });
 
-    loadMultipleAuthorsData(selectedAuthors);
+    drawDistribution(selectedAuthors);
+}
+
+async function updateTop(spanId, value) {
+    document.getElementById(spanId).textContent = value;
+    tophIndexValue = parseInt(document.getElementById("tophIndexSlider").value);
+    //select top tophIndexValue authors
+    console.log('allAuthorsData', allAuthorsData, tophIndexValue)
+    filteredAuthorsData = allAuthorsData.slice(0, tophIndexValue);
+    renderAuthorTable();
+    await loadAllAuthorsData();
+    filterByFellow();
 }
 
 
-let selectedAuthors = [];
-let nodeProbFilter = 0.5;
-let edgeProbFilter = 0.3;
-let frequency_global = {};
-
-
-function updateValue(spanId, value) {
+async function updateValue(spanId, value) {
     document.getElementById(spanId).textContent = value;
     nodeProbFilter = parseFloat(document.getElementById("nodeProbSlider").value);
     edgeProbFilter = parseFloat(document.getElementById("edgeProbSlider").value);
-    loadMultipleAuthorsData(selectedAuthors);
+    await loadAllAuthorsData();
+    drawDistribution(selectedAuthors);
 }
+
+function updateXAxis(spanId, value) {
+    document.getElementById(spanId).textContent = value;
+    xAxisValue = parseInt(document.getElementById("xAxisSlider").value);
+    drawDistribution(selectedAuthors);
+}
+
+document.getElementById("distributionSelector").addEventListener("change", function(event) {
+    fittedDistribution = event.target.value;
+    // 根据选择的分布重新计算和绘制图表
+    drawDistribution(selectedAuthors);
+});
+
 
 function rowClicked(authorID, isChecked) {
     if (isChecked) {
@@ -244,7 +321,7 @@ function rowClicked(authorID, isChecked) {
             selectedAuthors.splice(index, 1);
         }
     }
-    loadMultipleAuthorsData(selectedAuthors);
+    drawDistribution(selectedAuthors);
 }
 
 function computeFrequency(data) {
@@ -259,35 +336,183 @@ function computeFrequency(data) {
     return frequency;
 }
 
-function drawDistributionChart(elementId, frequency, titleText) {
-    // let frequency = computeFrequency(data);
-    let xAxisData = Object.keys(frequency);
-    let yAxisData = Object.values(frequency);
+function linearRegression(points) {
+    console.log('points', points)
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    let n = points[0].length;
 
-    console.log(titleText, frequency)
+    for (let i = 0; i < n; i++) {
+        sumX += points[0][i];
+        sumY += points[1][i];
+        sumXY += points[0][i] * points[1][i];
+        sumXX += points[0][i] * points[0][i];
+    }
+
+    console.log(sumX, sumY, sumXY, sumXX, n)
+
+    let m = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    let b = (sumY - m * sumX) / n;
+    return { m: m, b: b };
+}
+
+function computePowerRegression(data) {
+    console.log('data', data)
+    
+    let x = Object.keys(data).map(Number);
+    let y = Object.values(data).map(Number);
+
+    if (x[0] == 0) {
+        x.shift();
+        y.shift();
+    }
+
+    let firstZeroIndex = y.indexOf(0);
+    x = x.slice(0, firstZeroIndex);
+    y = y.slice(0, firstZeroIndex);
+    console.log('x', x, 'y', y)
+
+    // 对数-对数变换
+    let logX = x.map(val => Math.log(val));
+    let logY = y.map(val => Math.log(val));
+
+    // 线性回归
+    let regression = linearRegression([logX, logY]);
+    console.log("regression:", regression);
+    return regression;
+}
+
+function computeExponentialRegression(data) {
+    let x = Object.keys(data).map(Number);
+    let y = Object.values(data).map(Number);
+
+    let firstZeroIndex = y.indexOf(0);
+    x = x.slice(0, firstZeroIndex);
+    y = y.slice(0, firstZeroIndex);
+
+    // 对y进行对数变换
+    let logY = y.map(val => Math.log(val));
+
+    // 线性回归
+    let regression = linearRegression([x, logY]);
+    return regression;
+}
+
+function drawSingleDistribution(elementId, frequency, titleText, lastKey=null) {
+    // 1. Fill in the gaps in the frequency data
+    let maxKey = Math.max(...Object.keys(frequency).map(Number));
+    for (let i = 0; i <= maxKey; i++) {
+        if (!frequency[i]) {
+            frequency[i] = 0;
+        }
+    }
+    for (let i =0; i< xAxisValue; i++) {
+        delete frequency[i];
+    }
+
+    let total = Object.values(frequency).reduce((sum, value) => sum + value, 0);
+    let percentageFrequency = {};
+    for (let key in frequency) {
+        percentageFrequency[key] = (frequency[key] / total * 100).toFixed(2);  // 保留两位小数并添加%符号
+    }
+
+    console.log(elementId, percentageFrequency);
+
+    // 2. Find the last non-1 value and slice the data
+    if (lastKey == null) {
+        lastKey = Object.keys(percentageFrequency).reverse().find(key => percentageFrequency[key] > 0.1);
+    }
+    let slicedFrequency = {};
+    for (let i = xAxisValue; i <= lastKey; i++) {
+        slicedFrequency[i] = percentageFrequency[i];
+    }
+
+    let xAxisData = Object.keys(slicedFrequency);
+    let yAxisData = Object.values(slicedFrequency);
+
+    let cdfData = [];
+    let cumulativeValue = 0;
+    for (let i = 0; i < yAxisData.length; i++) {
+        cumulativeValue += parseFloat(yAxisData[i]);  // 假设yAxisData中的值是字符串形式的百分比
+        if (cumulativeValue>100) {
+            cumulativeValue = 100;
+        }
+        cdfData.push(cumulativeValue.toFixed(2));  // 保留两位小数
+    }
+
+    // console.log(titleText, frequency)
+    let fittedY, para, func;
+    if (fittedDistribution == 'power') {
+        para = computePowerRegression(percentageFrequency);
+        fittedY = xAxisData.map(x => x > 0?  Math.exp(para.b) * Math.pow(x, para.m): null);
+        func = `y = ${Math.exp(para.b).toFixed(2)}x^${para.m.toFixed(2)}`;
+    } else {
+        para = computeExponentialRegression(percentageFrequency);
+        fittedY = xAxisData.map(x => Math.exp(para.b) * Math.exp(para.m * x));
+        func = `y = ${Math.exp(para.b).toFixed(2)}e^${(para.m).toFixed(2)}x`;
+    }
 
     let option = {
         title: {
             text: titleText
         },
-        tooltip: {},
+        tooltip: {
+            trigger: 'item',
+            formatter: function(params) {
+                return `${params.marker}${params.name}\t${params.value}%<br/>count: ${frequency[params.name]}`;
+            }
+        },
         xAxis: {
             name: 'Degree',
             type: 'category',
             data: xAxisData
         },
-        yAxis: {
-            name: 'Number of Nodes'
-        },
+        yAxis: [{
+            name: 'Percentage of Nodes (%)'
+        }, {
+            name: 'CDF (%)',
+            position: 'right'
+        }],
         series: [{
+            name: 'PDF',
             type: 'bar',
             data: yAxisData
-        }]
+        }, {
+            name: 'CDF',
+            type: 'line',
+            data: cdfData,
+            smooth: true,  // 使曲线更加平滑
+            yAxisIndex: 1  // 使用第二个y轴
+        }, 
+        {
+            name: 'Fitted Curve' + fittedDistribution,
+            type: 'line',
+            data: fittedY,
+            smooth: true,
+            lineStyle: {
+                color: 'red',  // 或其他颜色
+                type: 'dashed'  // 虚线样式
+            }
+        }
+    ],
+        graphic: {
+            type: 'text',
+            left: '60%',  // 调整位置
+            top: '10%',   // 调整位置
+            style: {
+                text: func,  // 显示拟合的函数公式
+                fill: '#333',
+                fontSize: 14
+            }
+        }
     };
 
     let chart = echarts.init(document.getElementById(elementId));
     chart.setOption(option);
+    return lastKey;
+}
 
+function drawDistributionChart(elementId, frequency, titleText) {
+    // let frequency = computeFrequency(data);
     let chart_r = echarts.init(document.getElementById(elementId + '-r'));
     let frequency_r = JSON.parse(JSON.stringify(frequency_global[elementId]));
     for (let key in frequency) {
@@ -296,54 +521,34 @@ function drawDistributionChart(elementId, frequency, titleText) {
             delete frequency_r[key];
         }
     }
-    option_r = {
-        title: {
-            text: titleText + ' (Reverse)'
-        },
-        tooltip: {},
-        xAxis: {
-            name: 'Degree',
-            type: 'category',
-            data: Object.keys(frequency_r)
-        },
-        yAxis: {
-            name: 'Number of Nodes'
-        },
-        series: [{
-            type: 'bar',
-            data: Object.values(frequency_r)
-        }]
-    };
-    chart_r.setOption(option_r);
+    let lastKey_r = drawSingleDistribution(elementId + '-r', frequency_r, titleText + ' (Reverse)')
+    let lastKey = drawSingleDistribution(elementId, frequency, titleText);
+
+    if (lastKey_r > lastKey) {
+        drawSingleDistribution(elementId, frequency, titleText, lastKey_r);
+    } else {
+        drawSingleDistribution(elementId + '-r', frequency_r, titleText + ' (Reverse)', lastKey);
+    }
 }
 
-function loadMultipleAuthorsData(authorIDs) {
-    let promises = authorIDs.map(id => d3.json(`out/scigene_acl_anthology/${id}.json`));
+
+async function loadAllAuthorsData() {
+    // let promises = authorIDs_global.map(id => d3.json(`out/scigene_acl_anthology/graph/${id}.json`));
     document.getElementById("loadingIndicator").style.display = "flex";
+    allAuthorsFrequency = {};
 
-    Promise.all(promises).then(datas => {
-        let combinedData = {
-            edges: [],
-            nodes: {}
-        };
-
-        datas.forEach(data => {
-            combinedData.edges.push(...data.edges);
-            for (let node in data.nodes) {
-                if (combinedData.nodes[node]) {
-                    combinedData.nodes[node] += data.nodes[node];
-                } else {
-                    combinedData.nodes[node] = data.nodes[node];
-                }
-            }
-        });
-
+    let promises = authorIDs_global.map(id => d3.json(`out/scigene_acl_anthology/graph/${id}.json`).then(data => {
         // Filter nodes and edges based on given probabilities
-        let filteredNodes = Object.keys(combinedData.nodes).filter(key => combinedData.nodes[key] > nodeProbFilter);
-        let filteredEdges = combinedData.edges.filter(edge => edge.prob > edgeProbFilter);
+        let filteredNodes = Object.keys(data.nodes).filter(key => data.nodes[key] > nodeProbFilter);
+        let filteredEdges = data.edges.filter(edge => edge.prob > edgeProbFilter);
 
         // Compute indegree, outdegree, and total degree
         let indegree = {}, outdegree = {}, totaldegree = {};
+        // set other nodes in filteredNodes outdegree/indegree =0
+        filteredNodes.forEach(node => {
+            outdegree[node] = 0;
+            indegree[node] = 0;
+        })
         filteredEdges.forEach(edge => {
             if (!filteredNodes.includes(edge.source) || !filteredNodes.includes(edge.target)) {
                 return;
@@ -351,6 +556,8 @@ function loadMultipleAuthorsData(authorIDs) {
             outdegree[edge.source] = (outdegree[edge.source] || 0) + 1;
             indegree[edge.target] = (indegree[edge.target] || 0) + 1;
         });
+
+
         Object.keys(indegree).forEach(key => {
             totaldegree[key] = (totaldegree[key] || 0) + indegree[key];
         });
@@ -363,20 +570,58 @@ function loadMultipleAuthorsData(authorIDs) {
         let outdegreeData = computeFrequency(Object.values(outdegree));
         let totaldegreeData = computeFrequency(Object.values(totaldegree));
 
-        if (authorIDs == authorIDs_global) {
-            frequency_global = {
-                'indegree': indegreeData,
-                'outdegree': outdegreeData,
-                'totaldegree': totaldegreeData
-            };
-            console.log('all authors frequency_global', frequency_global)
+        allAuthorsFrequency[id] = {
+            'indegree': indegreeData,
+            'outdegree': outdegreeData,
+            'totaldegree': totaldegreeData
         }
+    }))
 
-        drawDistributionChart('indegree', indegreeData, 'In-degree Distribution');
-        drawDistributionChart('outdegree', outdegreeData, 'Out-degree Distribution');
-        drawDistributionChart('totaldegree', totaldegreeData, 'Total Degree Distribution');
-        document.getElementById("loadingIndicator").style.display = "none";
-    });
+    await Promise.all(promises);
+    console.log('allAuthorsFrequency', allAuthorsFrequency);
+    frequency_global = combineAllMaps(allAuthorsFrequency);
+    console.log('frequency_global', frequency_global);
+
+    // combine all the Map together (accumulate) to frequency_global
+    
+    document.getElementById("loadingIndicator").style.display = "none";
+}
+
+
+function combineAllMaps(maps) { 
+    let result = {
+        "indegree": {},
+        "outdegree": {},
+        "totaldegree": {}
+    };
+
+    for (let key in maps) {
+        for (let subKey in maps[key]) {
+            for (let degreeKey in maps[key][subKey]) {
+                if (!result[subKey][degreeKey]) {
+                    result[subKey][degreeKey] = 0;
+                }
+                result[subKey][degreeKey] += maps[key][subKey][degreeKey];
+            }
+        }
+    }
+    return result
+}
+
+
+function drawDistribution(authorIDs) {
+    let subMap = new Map()
+
+    authorIDs.forEach(key=>{
+        subMap[key] = allAuthorsFrequency[key]
+    })
+    combinedMap = combineAllMaps(subMap)
+    console.log('combined subMap', combinedMap)
+
+    drawDistributionChart('indegree', combinedMap['indegree'], 'In-degree Distribution');
+    drawDistributionChart('outdegree', combinedMap['outdegree'], 'Out-degree Distribution');
+    drawDistributionChart('totaldegree', combinedMap['totaldegree'], 'Total Degree Distribution');
+    updateTitle();
 }
 </script>
 </script>
