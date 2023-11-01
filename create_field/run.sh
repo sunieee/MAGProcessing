@@ -3,16 +3,17 @@
 # stdbuf -o0 ./create_field.sh > log/scigene_visualization2_field.log
 
 # export database=scigene_visualization_field
-export database=scigene_database_field
+# export database=scigene_database_field
+export database=scigene_VCG_field
 
 # rm -rf out/$database
-# mkdir -p out/$database
+mkdir -p out/$database
 
 python extract_scigene_field.py > out/$database/extract_scigene_field.log
 python extract_citation_timeseries.py > out/$database/extract_citation_timeseries.log
+python renew_database.py > out/$database/renew_database.log
 # python set_fellow.py $2
 
-export filterCondition='PaperCount_field > 20'
 python match_author.py > out/$database/match_author.log
 
 # out/{database}/groups.csv 是所有pair

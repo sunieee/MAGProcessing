@@ -2,7 +2,7 @@ import pandas as pd
 from utils import *
 from tqdm import tqdm
 
-match_df = pd.read_csv(f'out/{database}/filtered.csv', index_col=0)
+match_df = pd.read_csv(f'out/{database}/filtered.csv')
 
 ################################################################
 # 从后往前merge，只会删除后面的。这样在多个相同name情况下也能正常融合
@@ -12,14 +12,14 @@ match_df = pd.read_csv(f'out/{database}/filtered.csv', index_col=0)
 # 3. authors_field: 重新刷新一下统计信息：#paper, #citation, hIndex
 #   使用UPDATE JOIN语句将id2的值加到id1上，删除id2的记录
 ################################################################
-authorID_list = []
+authorIDs = set()
 for i in list(match_df.index)[::-1]:
     id1 = match_df.loc[i]['id1']
     id2 = match_df.loc[i]['id2']
     name1 = match_df.loc[i]['name1']
     name2 = match_df.loc[i]['name2']
     print('=' * 20)
-    print(f'merging authors: {name1}({id2}) -> {name2}({id1})')
+    print(f'merging authors: {name2}({id2}) -> {name1}({id1})')
 
     execute(f"""UPDATE {database}.paper_author_field
 SET authorID = '{id1}'
@@ -28,9 +28,10 @@ WHERE authorID = '{id2}';
 
     execute(f"DELETE FROM {database}.authors_field WHERE authorID = '{id2}';")
 
-    authorID_list.append(id1)
+    authorIDs.add(id1)
 
-repeatCondition = f"authorID IN ({', '.join(map(str, authorID_list))})"
+authorIDs_str = ', '.join([f"'{x}'" for x in authorIDs])
+repeatCondition = f"authorID IN ({authorIDs_str})"
 
 #######################################################################
 # update authors_field (局部更新用户信息)
@@ -65,15 +66,11 @@ SET af.CitationCount_field = tmp.total_citations;
 
 
 #######################################################################
-# calculate hIndex
+# calculate hIndex （对于合并后的作者计算）
 # 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
 # 以反映其影响力和论文引用分布情况。
 #######################################################################
-# process each author
-filterCondition = os.environ.get('filterCondition', 'PaperCount_field > 20')
-authorID_list = pd.read_sql(f"SELECT authorID FROM authors_field WHERE {filterCondition}", conn)['authorID'].tolist()
-
-for authorID in tqdm(authorID_list):
+for authorID in tqdm(authorIDs):
     cursor.execute(f"""select P.CitationCount from papers_field as P 
                    join paper_author_field as PA 
                    on PA.authorID = '{authorID}' and P.paperID = PA.paperID;""")

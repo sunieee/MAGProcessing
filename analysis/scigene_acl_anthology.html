@@ -170,8 +170,8 @@
         <div class="filters">
             Fitted Distribution Type:
             <select id="distributionSelector">
-                <option value="exponential" selected>指数分布</option>
-                <option value="power">幂律分布</option>
+                <option value="exponential" selected>Exponential Distribution</option>
+                <option value="power">Power-law Distribution</option>
             </select>
         </div>
 
@@ -337,8 +337,7 @@ function computeFrequency(data) {
 }
 
 function linearRegression(points) {
-    console.log('points', points)
-    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, sumYY = 0;
     let n = points[0].length;
 
     for (let i = 0; i < n; i++) {
@@ -346,14 +345,20 @@ function linearRegression(points) {
         sumY += points[1][i];
         sumXY += points[0][i] * points[1][i];
         sumXX += points[0][i] * points[0][i];
+        sumYY += points[1][i] * points[1][i];
     }
-
-    console.log(sumX, sumY, sumXY, sumXX, n)
 
     let m = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
     let b = (sumY - m * sumX) / n;
-    return { m: m, b: b };
+
+    // 计算R^2
+    let ssTot = sumYY - (sumY * sumY) / n;
+    let ssRes = sumYY - m * sumXY - b * sumY;
+    let r2 = 1 - ssRes / ssTot;
+
+    return { m: m, b: b, r2: r2 };
 }
+
 
 function computePowerRegression(data) {
     console.log('data', data)
@@ -444,11 +449,11 @@ function drawSingleDistribution(elementId, frequency, titleText, lastKey=null) {
     if (fittedDistribution == 'power') {
         para = computePowerRegression(percentageFrequency);
         fittedY = xAxisData.map(x => x > 0?  Math.exp(para.b) * Math.pow(x, para.m): null);
-        func = `y = ${Math.exp(para.b).toFixed(2)}x^${para.m.toFixed(2)}`;
+        func = `y = ${Math.exp(para.b).toFixed(2)}x^${para.m.toFixed(2)} (r2=${para.r2.toFixed(2)})`;
     } else {
         para = computeExponentialRegression(percentageFrequency);
         fittedY = xAxisData.map(x => Math.exp(para.b) * Math.exp(para.m * x));
-        func = `y = ${Math.exp(para.b).toFixed(2)}e^${(para.m).toFixed(2)}x`;
+        func = `y = ${Math.exp(para.b).toFixed(2)}e^${(para.m).toFixed(2)}x (r2=${para.r2.toFixed(2)})`;
     }
 
     let option = {
@@ -497,11 +502,11 @@ function drawSingleDistribution(elementId, frequency, titleText, lastKey=null) {
         graphic: {
             type: 'text',
             left: '60%',  // 调整位置
-            top: '10%',   // 调整位置
+            top: '72%',   // 调整位置
             style: {
                 text: func,  // 显示拟合的函数公式
-                fill: '#333',
-                fontSize: 14
+                fill: '#666',
+                fontSize: 15
             }
         }
     };

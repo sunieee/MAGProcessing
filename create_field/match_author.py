@@ -181,10 +181,12 @@ def test():
         levenshtein_distance(s1, s2) # / max(len(s1), len(s2))
     print('time', time.time() - t)
 
-    
-filterCondition = os.environ.get('filterCondition', 'PaperCount_field > 20')
-print(filterCondition)
-df = pd.read_sql_query(f'select * from authors_field where {filterCondition}', engine)
+# 在融合作者时，我们只关心前3000人，后面的人不重要，节省计算量
+# 获取第3000人的hIndex0，并得到所有hIndex >= hIndex0的人
+cursor.execute('select hIndex_field from authors_field order by hIndex_field desc limit 1 offset 3000')
+hIndex0 = cursor.fetchone()[0]
+print('MIN hIndex:', hIndex0)
+df = pd.read_sql_query(f'select * from authors_field where hIndex_field >= {hIndex0}', engine)
 
 print(df.shape)
 print(df.head())
@@ -226,7 +228,7 @@ else:
     # for i, j in tqdm(pairs):
     #     lev_dic[(i,j)] = levenshtein_distance(author_names[i], author_names[j]) / (len(author_names[i]) + len(author_names[j]))
     # 使用多进程计算编辑距离
-    print('computing levenshtein distances...(2min)')
+    print('computing levenshtein distances...(60s)')
     # 为了最大化并行计算的效率，进程的数量设置为与CPU核心数相同是一个好的起点。
     # 但是，最佳的进程数量可能还取决于具体的任务和其他系统负载
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
@@ -264,7 +266,7 @@ def process_group(group):
         'similarity': similarity
     }
 
-print(f'comparing names on {len(lev_lis)} pairs...(1min)')
+print(f'comparing names on {len(lev_lis)} pairs...(30s)')
 with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
     results = pool.map(process_group, lev_lis)
 
@@ -273,6 +275,6 @@ for result in results:
     groups.loc[len(groups)] = result
 
 
-groups.to_csv(f'out/{database}/groups.csv', encoding='UTF-8')
+groups.to_csv(f'out/{database}/groups.csv', encoding='UTF-8', index=False)
 
-groups[(groups['similarity'] > 0.96) & (groups['lev_dis'] < 0.1)].to_csv(f'out/{database}/match.csv')
+groups[(groups['similarity'] > 0.96) & (groups['lev_dis'] < 0.1)].to_csv(f'out/{database}/match.csv', index=False)

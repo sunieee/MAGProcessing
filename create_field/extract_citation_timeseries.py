@@ -39,14 +39,8 @@ paperID_list = list(set(paperID_list))
 
 def extract_paper_year(pair):
     paperID_list, order = pair
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=database,
-                            charset='utf8')
-    cursor = conn.cursor()
     print(f'* extracting paper year: {order}')
+    conn, cursor = create_connection(database)
     # 使用IN子句一次查询多个paperID
     macg_papers = pd.read_sql_query(f"""select paperID, year(PublicationDate) as year from MACG.papers 
                                 where paperID in {tuple(paperID_list)}""", engine)
@@ -116,12 +110,19 @@ def extract_citationCountMap(pair):
         if not (paperID in citationCountMap):
             citationCountMap[paperID] = {}
         citationCountMap[paperID][year] = int(row['cited_cnt'])
+    return citationCountMap
+
 
 group_size = 10000
 multiproces_num = 20
 group_length = math.ceil(len(papers_field_citation_timeseries_raw)/group_size)
 with multiprocessing.Pool(processes=multiproces_num) as pool:
-    results = pool.map(extract_citationCountMap, [(range(i*group_size, (i+1)*group_size), f'{i}/{group_length}') for i in range(group_length)])
+    results = pool.map(extract_citationCountMap, [
+        (
+            range(i * group_size, min((i + 1) * group_size, len(papers_field_citation_timeseries_raw))), 
+            f'{i}/{group_length}'
+        ) 
+        for i in range(group_length)])
     for result in results:
         for k, v in result.items():
             if k not in citationCountMap:
@@ -133,14 +134,8 @@ print('inserting into papers_field_citation_timeseries')
 
 def insert_citation_timeseries(pair):
     paperID_list, order = pair
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=database,
-                            charset='utf8')
-    cursor = conn.cursor()
     print(f'* inserting into papers_field_citation_timeseries: {order}')
+    conn, cursor = create_connection(database)
     for paperID in tqdm(paperID_list):
         if paperID2year.get(paperID, 0) == 0 or np.isnan(paperID2year[paperID]):
             print("paper year not valid: ", paperID, paperID2year.get(paperID, 0))
@@ -188,73 +183,10 @@ def insert_citation_timeseries(pair):
     cursor.close()
     conn.close()
 
-multiproces_num = 20
-group_size = 10000
 paperID_list = list(citationCountMap.keys())
 group_length = math.ceil(len(paperID_list)/group_size)
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(insert_citation_timeseries, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
-
-####################################################################################
-# update papers_field
-# 将论文表中的年份更新为发布日期的年份，为年份添加索引，然后从papers_field_citation_timeseries表复制引用次数序列数据到新的列中。
-####################################################################################
-print('updating papers_field')
-try_execute("ALTER TABLE papers_field DROP COLUMN citationCountByYear;")
-
-cursor.execute("SHOW COLUMNS FROM papers_field LIKE 'year'")
-if cursor.fetchone() is None:
-    cursor.execute("ALTER TABLE papers_field ADD year INT")
-    conn.commit()
-
-execute('''
-update papers_field set year = year(PublicationDate);
-alter table papers_field add index(year);
-
-ALTER TABLE papers_field ADD citationCountByYear varchar(999);
-update papers_field as PA, papers_field_citation_timeseries as PM set PA.citationCountByYear = PM.citationCountByYear where PA.paperID = PM.paperID;
-''')
-
-
-#######################################################################
-# update authors_field
-# 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息
-#######################################################################
-print('updating authors_field')
-
-try_execute("ALTER TABLE authors_field DROP COLUMN PaperCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN CitationCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN hIndex_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN FellowType;")
-
-execute('''
-ALTER TABLE authors_field ADD PaperCount_field INT DEFAULT 0;
-UPDATE authors_field af
-JOIN (
-    SELECT authorID, COUNT(*) as count_papers
-    FROM paper_author_field
-    GROUP BY authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.PaperCount_field = tmp.count_papers;
-
-ALTER TABLE authors_field ADD CitationCount_field INT DEFAULT 0;
-UPDATE authors_field af
-JOIN (
-    SELECT PA.authorID, SUM(P.citationCount) as total_citations
-    FROM papers_field as P 
-    JOIN paper_author_field as PA on P.paperID = PA.paperID 
-    WHERE P.CitationCount >= 0 
-    GROUP BY PA.authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.CitationCount_field = tmp.total_citations;
-
-ALTER TABLE authors_field ADD hIndex_field INT;
-''')
-
-# ALTER TABLE authors_field ADD FellowType varchar(999);
-# update authors_field as af, scigene_acl_anthology.fellow as f 
-#     set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
-
 
 cursor.close()
 conn.close()

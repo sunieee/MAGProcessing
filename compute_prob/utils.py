@@ -16,9 +16,8 @@ database = os.environ.get('database', 'scigene_visualization_field')
 # numOfTopAuthors = int(numOfTopAuthors)
 
 multiproces_num = 20
-filterCondition = os.environ.get('filterCondition', f"PaperCount_field > 20")
-# select exact top field authors
-
+topN = os.environ.get('topN', 5000)
+topN = int(topN)
 
 # 对于 authorID 的限制
 # with open('out/test.txt', 'r') as f:
@@ -105,6 +104,10 @@ def try_execute(sql, cursor=cursor):
         pass
     conn.commit()
 
+cursor.execute(f'select hIndex_field from authors_field order by hIndex_field desc limit 1 offset {topN}')
+hIndex0 = cursor.fetchone()[0]
+print('MIN hIndex:', hIndex0)
+filterCondition = f'hIndex_field >= {hIndex0}'
 
 top_field_authors_path = f'out/{database}/top_field_authors.csv'
 if os.path.exists(top_field_authors_path):
