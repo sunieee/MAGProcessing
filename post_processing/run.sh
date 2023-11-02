@@ -1,6 +1,7 @@
 
 # export database=scigene_visualization_field
-export database=scigene_database_field
+# export database=scigene_database_field
+export database=scigene_VCG_field
 
 
 rm -rf out/${database}

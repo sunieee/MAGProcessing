@@ -121,3 +121,4 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
 
 cursor.close()
 conn.close()
+
