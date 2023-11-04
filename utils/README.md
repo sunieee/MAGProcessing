@@ -45,8 +45,10 @@ CREATE TABLE `MACG`.`abstract_openalex` (
 
 1. 确认数据表abstract字段的字符编码是utf8mb4
 ```sql
-ALTER DATABASE MACG CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-ALTER TABLE abstracts CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER DATABASE MACG CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+ALTER TABLE abstracts CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+# docker cp my.cnf mysql:/etc/mysql/conf.d/
 
 # mysql -u username -p --default-character-set=utf8mb4
 LOAD DATA INFILE 'path/to/PaperAbstracts.csv' INTO TABLE abstracts
@@ -71,3 +73,9 @@ SET CHARACTER SET utf8mb4;
 with open('yourfile.csv', encoding='utf-8') as f:
     # Your reading logic
 ```
+
+
+
+
+
+多进程导入abstract_openalex表：`python import_mag_abstract.py > import_mag_abstract.log`

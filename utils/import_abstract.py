@@ -44,24 +44,34 @@ def import_abstract_from_file(filename):
         data = json.load(f)
     conn, cursor = create_connection()
 
+    paperIDs = set()
+
     for ix, paperID in tqdm(enumerate(data), total=len(data)):
         # insert into abstracts_openalex
         # if paperID in paperIDs:
         #     continue
         abstract = data[paperID]
+        if len(abstract) == 0:
+            continue
+        if abstract[:8] in ['Abstract', 'ABSTRACT', 'abstract']:
+            abstract = abstract[8:].strip()
+        
         sql = f"""
-        INSERT INTO abstracts_openalex (paperID, abstract) 
+        INSERT INTO abstracts (paperID, abstract) 
         VALUES (%s, %s)
-        ON DUPLICATE KEY UPDATE abstract = %s;
         """
+        # ON DUPLICATE KEY UPDATE paperID = paperID;
         # 
         try:
-            cursor.execute(sql, (paperID, abstract, abstract))
+            cursor.execute(sql, (paperID, abstract))
+            paperIDs.add(paperID)
+            if ix % 100 == 0:
+                conn.commit()
         except Exception as e:
             print(e, paperID, abstract)
-        
-        if ix % 1000 == 0:
-            conn.commit()
+    
+    with open(f'paperID/{filename}.txt', 'w') as f:
+        f.write('\n'.join(paperIDs))
 
     conn.close()
 
