@@ -29,7 +29,7 @@ CREATE TABLE `MACG`.`abstract_openalex` (
   PRIMARY KEY (`paperID`));
 ```
 
-多进程导入abstract_openalex表：`python import_abstract.py > import_abstract.log`
+多进程导入abstract_openalex表：`python import_abstract.py > out/import_abstract.log`
 
 # utf-8编码
 
@@ -78,4 +78,7 @@ with open('yourfile.csv', encoding='utf-8') as f:
 
 
 
-多进程导入abstract_openalex表：`python import_mag_abstract.py > import_mag_abstract.log`
+多进程导入abstract_openalex表：`python import_mag_abstract.py > out/import_mag_abstract.log`
+
+
+多进程整理abstract, 导入abstract_new表：`python clean_abstract_table.py > out/clean_abstract_table.log`

@@ -70,7 +70,8 @@ def import_abstract_from_file(filename):
         except Exception as e:
             print(e, paperID, abstract)
     
-    with open(f'paperID/{filename}.txt', 'w') as f:
+    filename = filename.replace('out', 'out/paperID')
+    with open(f'{filename}.txt', 'w') as f:
         f.write('\n'.join(paperIDs))
 
     conn.close()

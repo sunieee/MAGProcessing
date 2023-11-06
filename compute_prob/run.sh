@@ -6,8 +6,8 @@ set -e
 #sh ./all_features.sh all_dataset_link scigene_NLP_field papers_field_citation_timeseries
 
 # export database=scigene_visualization_field
-# export database=scigene_database_field
-export database=scigene_VCG_field
+export database=scigene_database_field
+# export database=scigene_VCG_field
 export topN=5000
 
 # rm -rf out/$database
