@@ -1,25 +1,27 @@
 
 # create field database
 
-The create_field process in the MAG Data Processing Pipeline involves establishing a specialized database tailored to specific academic fields. It involves extracting relevant paper IDs based on field, conference, and journal identifiers, and managing large data sets with efficient querying and parallel processing. This sets the foundation for structured data analysis within the specified academic field.
+Creating a specialized database tailored to specific academic fields based on fields, conferences, and journals. 
 
 ## pipeline
 
-1. **extract_scigene_field**:
-  - Creates a basic database for the field.
-  - Searches for papers under the field's specific fieldID, children, ConferenceID, and JournalID as per `config.yaml`, and saves the paper IDs in `papers.txt`.
-  - Retrieves subsets of the papers, paper_authors, paper_reference, and authors tables from MySQL and saves them to local files. It breaks down large queries into smaller ones, each querying 2000 paper IDs, using 20 concurrent threads with `get_data_from_table_concurrent`.
-  - Reads the subsets of these tables and uploads them to MySQL, creating indices for the field-specific sub-tables after table creation.
-2. **extract_citation_timeseries**:
-  - Creates a table named `papers_field_citation_timeseries_raw`, which records annual citation counts for each paper, based on citation and publication date information.
-  - Extracts and processes data from the raw table to create `papers_field_citation_timeseries`, recording the citation counts of each paper across different years (current citations, total citations, citation sequence) while ensuring continuity and completeness of the data for each year.
-3. **renew_database**:
-  - Updates the publication year in the papers table and adds indices for the years. Copies citation sequence data from the `papers_field_citation_timeseries` table.
-  - Calculates and adds the number of papers and citations for each author within the field, updating the total citation counts for authors.
-  - Computes and updates each author's h-index in the specific field based on their citation data, adhering to the definition of h-index.
-4. **match_author/merge_author**:
-  - Addresses the issue of name duplication in MAG by merging records.
-  - Checks for and merges duplicates among the top 3000 authors based on their h-index (details of the process are provided later).
+The pipeline is outlined in `run.sh`. Before executing, it is necessary to change `export database=scigene_VCG_field` to the specified field database. Also, define the corresponding `fieldID, children, ConferenceID, and JournalID` for the field in config.yaml. These parameters represent the field covered by the database, the fields for which sub-domains need to be searched, and the associated conferences and journals.
+
+1. **extract_scigene_field.py**:
+    - Creates a basic database for the field.
+    - Searches for papers under the field's specific fieldID, children, ConferenceID, and JournalID as per `config.yaml`, and saves the paper IDs in `papers.txt`.
+    - Retrieves subsets of the papers, paper_authors, paper_reference, and authors tables from MySQL and saves them to local files. It breaks down large queries into smaller ones, each querying 2000 paper IDs, using 20 concurrent threads with `get_data_from_table_concurrent`.
+    - Reads the subsets of these tables and uploads them to MySQL, creating indices for the field-specific sub-tables after table creation.
+2. **extract_citation_timeseries.py**:
+    - Creates a table named `papers_field_citation_timeseries_raw`, which records annual citation counts for each paper, based on citation and publication date information.
+    - Extracts and processes data from the raw table to create `papers_field_citation_timeseries`, recording the citation counts of each paper across different years (current citations, total citations, citation sequence) while ensuring continuity and completeness of the data for each year.
+3. **renew_database.py**:
+    - Updates the publication year in the papers table and adds indices for the years. Copies citation sequence data from the `papers_field_citation_timeseries` table.
+    - Calculates and adds the number of papers and citations for each author within the field, updating the total citation counts for authors.
+    - Computes and updates each author's h-index in the specific field based on their citation data, adhering to the definition of h-index.
+4. **match_author.py/merge_author.py**:
+    - Addresses the issue of name duplication in MAG by merging records.
+    - Checks for and merges duplicates among the top 3000 authors based on their h-index (details of the process are provided later).
 
 By executing the aforementioned steps, the database tables have been established, adhering to the naming conventions outlined below. Notice: The titles of these steps correspond directly to the names of the Python files used.
 

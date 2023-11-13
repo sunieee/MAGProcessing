@@ -1,12 +1,16 @@
+# compute probability
 
-# 计算点概率
+Computing the probabilities of papers and citations, also referred to as node and edge probabilities.
 
-使用`./run.sh`运行，环境配置主要在：`utils.py`
-## build_top_author_MAG_graphs
-创建指定author的个人pcg数据库，可以用任意authors_field中变量当做过滤条件
+## pipeline
 
-## compute_top_author_key_papers_MAG_graphs
-计算指定author数据库的论文点概率
+The pipeline is defined in `run.sh`. Before execution, modify `export database=scigene_VCG_field` to target the specified field database. The default topN is set to 5000, indicating that the process will focus on the top 5000 authors sorted by hIndex.
 
-## dump_top_author_MAG_graphs
-导出author对应的点概率和边概率
+1. **compute_key_papers.py**
+   - Calculates the probability of papers for the specified author database.
+2. **compute_key_citation**
+   - **compute_similarity_features.py** - Generates similarity features.
+   - **run_extract_features.py** - Extracts necessary features.
+   - **compute_link_prob.py** - Calculates the probability of citations/links.
+3. **analyse_distribution.py**
+   - Analyzes the distribution of generated probabilities for papers and citations, and creates corresponding visualizations.
