@@ -1,26 +1,27 @@
 
 # create field database
 
+The create_field process in the MAG Data Processing Pipeline involves establishing a specialized database tailored to specific academic fields. It involves extracting relevant paper IDs based on field, conference, and journal identifiers, and managing large data sets with efficient querying and parallel processing. This sets the foundation for structured data analysis within the specified academic field.
 
-按照`run.sh`所示，构建过程分为以下5个步骤:
-1. extract_scigene_field
-  - 创建field基础数据库
-  - 根据`config.yaml`搜索该field对应fieldID, children, ConferenceID, JournalID下的所有论文paperID，保存在`papers.txt`
-  - 从mysql中获取papers, paer_auther, paper_reference, authors四个表的field子数据，并保存到本地文件（使用get_data_from_table_concurrent将大查询分解为每次查询2000个paperID，使用20个线程并行）
-  - 读取四个子表，并上传到mysql。创建表后添加领域子表的mysql索引
-2. extract_citation_timeseries
-  - 从论文引用和发布日期信息中创建了一个名为papers_field_citation_timeseries_raw的数据表，记录了每篇论文每年的引用次数
-  - 从raw中提取、处理并创建名为 papers_field_citation_timeseries 的数据表，记录了每篇论文在不同年份的引用次数信息（当前引用、总引用、引用序列），同时保证年份的连续性和数据的完整性
-3. renew_database
-  - 将论文表中的年份更新为发布日期的年份，为年份添加索引，然后从papers_field_citation_timeseries表复制引用次数序列数据
-  - 计算并添加作者在领域内的论文及引用数量，更新作者的引用总数信息
-  - 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
-4. match_author/merge_author：
-  - in MAG, some people have name duplication problem, need to merge
-  - 匹配hIndex前3000人是否有重复的人，如果重复则合并（详细过程见后）
+## pipeline
 
+1. **extract_scigene_field**:
+  - Creates a basic database for the field.
+  - Searches for papers under the field's specific fieldID, children, ConferenceID, and JournalID as per `config.yaml`, and saves the paper IDs in `papers.txt`.
+  - Retrieves subsets of the papers, paper_authors, paper_reference, and authors tables from MySQL and saves them to local files. It breaks down large queries into smaller ones, each querying 2000 paper IDs, using 20 concurrent threads with `get_data_from_table_concurrent`.
+  - Reads the subsets of these tables and uploads them to MySQL, creating indices for the field-specific sub-tables after table creation.
+2. **extract_citation_timeseries**:
+  - Creates a table named `papers_field_citation_timeseries_raw`, which records annual citation counts for each paper, based on citation and publication date information.
+  - Extracts and processes data from the raw table to create `papers_field_citation_timeseries`, recording the citation counts of each paper across different years (current citations, total citations, citation sequence) while ensuring continuity and completeness of the data for each year.
+3. **renew_database**:
+  - Updates the publication year in the papers table and adds indices for the years. Copies citation sequence data from the `papers_field_citation_timeseries` table.
+  - Calculates and adds the number of papers and citations for each author within the field, updating the total citation counts for authors.
+  - Computes and updates each author's h-index in the specific field based on their citation data, adhering to the definition of h-index.
+4. **match_author/merge_author**:
+  - Addresses the issue of name duplication in MAG by merging records.
+  - Checks for and merges duplicates among the top 3000 authors based on their h-index (details of the process are provided later).
 
-上述表格式参考已建立的下述表格式
+By executing the aforementioned steps, the database tables have been established, adhering to the naming conventions outlined below. Notice: The titles of these steps correspond directly to the names of the Python files used.
 
 ```
 +---------------------------------+
