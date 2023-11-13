@@ -1,44 +1,25 @@
-# ARC数据处理流程
+# MAG Data Processing
 
-## 名词解释
+MAG Data Processing is a comprehensive pipeline designed to process data from the raw MAG database. It includes several key steps:
 
-MAG
+1. create_field: Creating a specialized database based on fields, conferences, and journals.
+2. compute_prob: Computing the probabilities of papers and citations, also referred to as node and edge probabilities.
+3. topic: Determining topics by analyzing the abstracts and titles of papers, especially those from top authors in a given field.
+4. post_processing: Implementing post-processing steps to integrate contextual information such as abstracts, authors, and venues, making the data ready for use in GFVis.
 
-hIndex
+Note that steps 2 and 3 can be processed in parallel. Additionally, the folders are named identically to their corresponding titles for ease of reference.
 
-ARC
+## Keyword Explanation
+
+[MAG(Microsoft Academic Graph)](https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/):  The Microsoft Academic Graph is a heterogeneous graph containing scientific publication records, citation relationships between those publications, as well as authors, institutions, journals, conferences, and fields of study. This graph is used to power experiences in Bing, Cortana, Word, and in [Microsoft Academic](https://www.microsoft.com/en-us/research/project/academic/). The graph is currently being updated on a bi-weekly basis until the end of the calendar year 2021.
+
+[hIndex](https://en.wikipedia.org/wiki/H-index): The **h-index** is an [author-level metric](https://en.wikipedia.org/wiki/Author-level_metric) that measures both the [productivity](https://en.wikipedia.org/wiki/Productivity) and [citation impact](https://en.wikipedia.org/wiki/Citation_impact) of the [publications](https://en.wikipedia.org/wiki/Scientific_publication), initially used for an individual [scientist](https://en.wikipedia.org/wiki/Scientist) or scholar.
 
 
+[ACL(Association for Computational Linguistics)](https://en.wikipedia.org/wiki/Association_for_Computational_Linguistics): is a scientific and professional organization for people working on [natural language processing](https://en.wikipedia.org/wiki/Natural_language_processing). Its namesake conference is one of the primary high impact conferences for natural language processing research, along with [EMNLP](https://en.wikipedia.org/wiki/EMNLP).
 
-## 构建图模型
 
-注意：除了建领域数据库会存一份到数据库当中，其他几步直接以csv数据表的形式存到本地
+[ARC(ACL Anthology Reference Corpus)](https://paperswithcode.com/dataset/acl-arc-1): is an English corpus made up of conference and journal papers in natural language processing and computational linguistics. The corpus has been prepared from 18,288 papers of the ACL Anthology published in 1979–2015.
 
-1. 建领域数据库：`192.168.0.118:/home/xiaofengli/pyCode/create_field`
-
-2. 抽子图：`192.168.0.118:/home/xiaofengli/pyCode/parser`
-    - build-top-author：生成前多少名scholar
-    - compute-top-key-paper：计算点概率（每个学者论文的isKeyPaper）
-    - dump：下载成csv
-
-3. 抽边特征：`192.168.0.118:/home/xiaofengli/pyCode/field_edge/all_features.sh`
-    - （计算步骤，6个py）
-    - 但也可以直接使用已经抽取好的特征/home/xiaofengli/pyCode/field_edge/all_features.csv
-
-4. 计算边概率：`/home/xfl/download/acl/compute_proba.py`
-
-5. 后处理
-
-边概率训练：...
-
-```python
-file = open('saved_model_another_5depth.pickle','rb')
-model = pickle.load(file)
-result=model.predict_proba(db2)[:,1]
-```
-
-边概率模型：https://github.com/tinyApril/GeneticFlow/tree/main/Award_Inference_Task/Award_Inference_Experiment/GeneticFlow_Signatures/GNN_NLP_data/data_with_proba
-
-`saved_model.pickle`, `saved_model_5depth.pickle` 适用于一切MAG数据库
 
 
