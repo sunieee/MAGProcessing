@@ -39,7 +39,7 @@ def process_paperID(paperIDs):
             
             # 插入到新表中
             cursor.execute("""
-                INSERT INTO MACG_new.abstracts_new (paperID, abstract)
+                INSERT INTO MACG.abstracts_new (paperID, abstract)
                 VALUES (%s, %s)
                 ON DUPLICATE KEY UPDATE abstract=VALUES(abstract);
             """, (paperID, merged_abstract))

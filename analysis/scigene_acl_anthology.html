@@ -172,6 +172,7 @@
             <select id="distributionSelector">
                 <option value="exponential" selected>Exponential Distribution</option>
                 <option value="power">Power-law Distribution</option>
+                <option value="none">None</option>
             </select>
         </div>
 
@@ -359,32 +360,63 @@ function linearRegression(points) {
     return { m: m, b: b, r2: r2 };
 }
 
-
-function computePowerRegression(data) {
-    console.log('data', data)
-    
+function computePowerRegression(data, k) {
+    // 拟合形如 y = a(x+k)^-b 的幂律分布
     let x = Object.keys(data).map(Number);
     let y = Object.values(data).map(Number);
 
-    if (x[0] == 0) {
-        x.shift();
-        y.shift();
-    }
+    console.log('computePowerRegression', 'x', x, 'y', y)
 
     let firstZeroIndex = y.indexOf(0);
-    x = x.slice(0, firstZeroIndex);
-    y = y.slice(0, firstZeroIndex);
-    console.log('x', x, 'y', y)
+    if (firstZeroIndex !== -1) {
+        x = x.slice(0, firstZeroIndex);
+        y = y.slice(0, firstZeroIndex);
+    }
 
-    // 对数-对数变换
-    let logX = x.map(val => Math.log(val));
+    // 对y进行对数变换
     let logY = y.map(val => Math.log(val));
 
+    // 对x进行变换，并处理x+k<=0的情况
+    let transformedX = x.map(val => {
+        let shifted = val + k;
+        if (shifted <= 0) {
+            throw new Error('x+k must be greater than 0');
+        }
+        return Math.log(shifted);
+    });
+
     // 线性回归
-    let regression = linearRegression([logX, logY]);
-    console.log("regression:", regression);
-    return regression;
+    let para = linearRegression(transformedX, logY);
+
+    // 将线性回归的结果转换回原始参数
+    return { a: Math.exp(para.b), b: -para.m, k: k };
 }
+
+// function computePowerRegression(data) {
+//     console.log('data', data)
+    
+//     let x = Object.keys(data).map(Number);
+//     let y = Object.values(data).map(Number);
+
+//     if (x[0] == 0) {
+//         x.shift();
+//         y.shift();
+//     }
+
+//     let firstZeroIndex = y.indexOf(0);
+//     x = x.slice(0, firstZeroIndex);
+//     y = y.slice(0, firstZeroIndex);
+//     console.log('x', x, 'y', y)
+
+//     // 对数-对数变换
+//     let logX = x.map(val => Math.log(val));
+//     let logY = y.map(val => Math.log(val));
+
+//     // 线性回归
+//     let regression = linearRegression([logX, logY]);
+//     console.log("regression:", regression);
+//     return regression;
+// }
 
 function computeExponentialRegression(data) {
     let x = Object.keys(data).map(Number);
@@ -402,8 +434,30 @@ function computeExponentialRegression(data) {
     return regression;
 }
 
+function calculateR2(yAxisData, fittedY) {
+    // console.log('yAxisData', yAxisData, 'fittedY', fittedY)
+    // 将yAxisData中null改成0
+    for (let i = 0; i < yAxisData.length; i++) {
+        if (yAxisData[i] == null) {
+            yAxisData[i] = 0;
+        }
+    }
+    // 计算y的平均值
+    const yMean = yAxisData.reduce((acc, val) => acc + val, 0) / yAxisData.length;
+
+    // 计算总平方和SST
+    const SST = yAxisData.reduce((acc, val) => acc + (val - yMean) ** 2, 0);
+
+    // 计算残差平方和SSE
+    const SSE = yAxisData.reduce((acc, val, idx) => acc + (val - fittedY[idx]) ** 2, 0);
+
+    // 计算R²
+    return 1 - (SSE / SST);
+}
+
 function drawSingleDistribution(elementId, frequency, titleText, lastKey=null) {
     // 1. Fill in the gaps in the frequency data
+    // change values of frequency to float
     let maxKey = Math.max(...Object.keys(frequency).map(Number));
     for (let i = 0; i <= maxKey; i++) {
         if (!frequency[i]) {
@@ -417,7 +471,8 @@ function drawSingleDistribution(elementId, frequency, titleText, lastKey=null) {
     let total = Object.values(frequency).reduce((sum, value) => sum + value, 0);
     let percentageFrequency = {};
     for (let key in frequency) {
-        percentageFrequency[key] = (frequency[key] / total * 100).toFixed(2);  // 保留两位小数并添加%符号
+        percentageFrequency[key] = (frequency[key] / total * 100).toFixed(3);  // 保留两位小数并添加%符号
+        percentageFrequency[key] = parseFloat(percentageFrequency[key]);
     }
 
     console.log(elementId, percentageFrequency);
@@ -441,19 +496,25 @@ function drawSingleDistribution(elementId, frequency, titleText, lastKey=null) {
         if (cumulativeValue>100) {
             cumulativeValue = 100;
         }
-        cdfData.push(cumulativeValue.toFixed(2));  // 保留两位小数
+        cdfData.push(cumulativeValue.toFixed(3));  // 保留两位小数
     }
 
     // console.log(titleText, frequency)
     let fittedY, para, func;
     if (fittedDistribution == 'power') {
-        para = computePowerRegression(percentageFrequency);
-        fittedY = xAxisData.map(x => x > 0?  Math.exp(para.b) * Math.pow(x, para.m): null);
-        func = `y = ${Math.exp(para.b).toFixed(2)}x^${para.m.toFixed(2)} (r2=${para.r2.toFixed(2)})`;
-    } else {
-        para = computeExponentialRegression(percentageFrequency);
+        para = computePowerRegression(slicedFrequency, 1);
+        console.log('power para', para)
+        fittedY = xAxisData.map(x => para.a * Math.pow((x + para.k), -para.b));
+        let r2 = calculateR2(yAxisData, fittedY).toFixed(4);   // para.r2.toFixed(3)
+        func = `y = ${para.a.toFixed(3)}(x+${para.k})^${-para.b.toFixed(3)} (r2=${r2})`;
+    } else if(fittedDistribution == 'exponential') {
+        para = computeExponentialRegression(slicedFrequency);
         fittedY = xAxisData.map(x => Math.exp(para.b) * Math.exp(para.m * x));
-        func = `y = ${Math.exp(para.b).toFixed(2)}e^${(para.m).toFixed(2)}x (r2=${para.r2.toFixed(2)})`;
+        let r2 = calculateR2(yAxisData, fittedY).toFixed(4);   // para.r2.toFixed(3)
+        func = `y = ${Math.exp(para.b).toFixed(3)}e^${(para.m).toFixed(3)}x (r2=${r2})`;
+    } else {
+        fittedY = [];
+        func = '';
     }
 
     let option = {

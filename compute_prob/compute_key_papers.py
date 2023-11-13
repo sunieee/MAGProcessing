@@ -11,6 +11,8 @@ firstAuthorTmp = df_paper_author_field_filtered.merge(df_paper_author_field, on=
     .query("authorOrder > 1 and authorOrder_first == 1") 
 firstAuthorTmp = firstAuthorTmp[['authorID', 'paperID', 'authorOrder', 'authorID_first']]
 firstAuthorTmp = firstAuthorTmp.groupby(['authorID', 'authorID_first']).size().reset_index(name='count')
+firstAuthors = firstAuthorTmp['authorID_first'].unique().tolist()
+
 '''
         authorID authorID_first  count
 0      100461504     2012192335      2
@@ -28,61 +30,39 @@ firstAuthorTmp = firstAuthorTmp.groupby(['authorID', 'authorID_first']).size().r
 [95063 rows x 3 columns]
 '''
 
-
 ######################################################################
-# 从数据库中查询领域的**相关论文第一作者**信息，构建两个映射：
-# 1. firstAuthorPaperCountMap：映射每个作者ID到一个子映射，其中子映射的键是年份，值是该年份的论文数量。
-# 2. firstAuthorWeightedPaperCountMap：与上面的映射类似，但值是加权的论文数量，
+# 从数据库中查询领域的**firstAuthor + topAuthor **信息，构建两个映射：
+# 1. paperCountMap：映射每个作者ID到一个子映射，其中子映射的键是年份，值是该年份的论文数量。
+# 2. weightedPaperCountMap：与上面的映射类似，但值是加权的论文数量，
 #       其中权重是1/作者顺序，但仅考虑作者顺序小于或等于MIN_STUDENT_AUTHOR_ORDER的作者。
 ######################################################################
 print("compute first-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
 # Perform the necessary merges and group by operations
 merged_df = df_paper_author_field.merge(df_papers_field, on='paperID')
-filtered_df = merged_df[merged_df['authorID'].isin(firstAuthorTmp['authorID_first'].unique())]
+filtered_df = merged_df[merged_df['authorID'].isin(firstAuthors + authorID_list)]
 grouped = filtered_df.groupby(['authorID', 'authorOrder', 'year']).size().reset_index(name='cnt')
-firstAuthorPaperCountMap = {}
-firstAuthorWeightedPaperCountMap = {}
+paperCountMap = {}
+weightedPaperCountMap = {}
 
 for _, row in grouped.iterrows():
     authorID = row['authorID'].strip()
     authorOrder = int(row['authorOrder'])
     year = int(row['year'])
     count = int(row['cnt'])
-
-    # 更新firstAuthorPaperCountMap
-    yearCountMap = firstAuthorPaperCountMap.setdefault(authorID, {})
+    # 更新paperCountMap
+    yearCountMap = paperCountMap.setdefault(authorID, {})
     yearCountMap[year] = yearCountMap.get(year, 0) + count
-
-    # 更新firstAuthorWeightedPaperCountMap
+    # 更新weightedPaperCountMap
     if authorOrder <= MIN_STUDENT_AUTHOR_ORDER:
-        yearWeightedCountMap = firstAuthorWeightedPaperCountMap.setdefault(authorID, {})
+        yearWeightedCountMap = weightedPaperCountMap.setdefault(authorID, {})
         yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
-
-######################################################################
-# 从数据库中查询领域的**相关作者（topAuthor）**信息，构建一个映射topAuthorPaperCountMap。
-# 这个映射的键是作者ID，值是另一个映射，其中子映射的键是年份，值是该年份的论文数量，数据应该相同于 firstAuthorPaperCountMap
-######################################################################
-print("compute top-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
-merged_df = df_paper_author_field_filtered.merge(df_papers_field, on='paperID', how='inner', suffixes=('', '_P'))
-merged_df = merged_df[['authorID', 'paperID', 'authorOrder', 'year']].drop_duplicates()
-grouped = merged_df.groupby(['authorID', 'authorOrder', 'year']).size().reset_index(name='cnt')
-topAuthorPaperCountMap = {}
-
-for _, row in grouped.iterrows():
-    authorID = row['authorID'].strip()
-    year = int(row['year'])
-    count = int(row['cnt'])
-
-    # 更新topAuthorPaperCountMap
-    yearCountMap = topAuthorPaperCountMap.setdefault(authorID, {})
-    yearCountMap[year] = yearCountMap.get(year, 0) + count
 
 
 ######################################################################
 # 从数据库中查询领域的论文合作者信息，**相关作者（topAuthor）**有关的不是第一作者论文，并基于查询结果构建两个映射：
-# 1. coAuthorWeightedPaperCountMap：映射每个合作者ID对（由两个作者ID组成）到一个子映射，
+# 1. coWeightedPaperCountMap：映射每个合作者ID对（由两个作者ID组成）到一个子映射，
 #   其中子映射的键是年份，值是加权的论文数量，其中权重是1/作者顺序。
-# 2. coAuthorPaperCountMap：与上面的映射类似，但值是该年份的论文数量。
+# 2. coPaperCountMap：与上面的映射类似，但值是该年份的论文数量。
 ######################################################################
 print("compute co-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
 coauthor_joined = firstAuthorTmp.merge(
@@ -115,35 +95,31 @@ coauthor_year_joined = coauthor_year_joined[['authorID_first', 'authorID', 'pape
 grouped = coauthor_year_joined.groupby(['authorID_first', 'authorID', 'authorOrder', 'year']).size().reset_index(name='count')
 grouped['coAuthorID'] = grouped['authorID_first'] + "-" + grouped['authorID']
 
-coAuthorWeightedPaperCountMap = {}
-coAuthorPaperCountMap = {}
+coWeightedPaperCountMap = {}
+coPaperCountMap = {}
 
 for _, row in grouped.iterrows():
     coAuthorID = row['coAuthorID']
     year = int(row['year'])
     count = row['count']
     authorOrder = row['authorOrder']
-    
-    # For coAuthorWeightedPaperCountMap
-    yearWeightedCountMap = coAuthorWeightedPaperCountMap.setdefault(coAuthorID, {})
+    # For coWeightedPaperCountMap
+    yearWeightedCountMap = coWeightedPaperCountMap.setdefault(coAuthorID, {})
     yearWeightedCountMap[year] = yearWeightedCountMap.get(year, 0) + count / authorOrder
-
-    # For coAuthorPaperCountMap
-    yearCountMap = coAuthorPaperCountMap.setdefault(coAuthorID, {})
+    # For coPaperCountMap
+    yearCountMap = coPaperCountMap.setdefault(coAuthorID, {})
     yearCountMap[year] = yearCountMap.get(year, 0) + count
 
 
 # save all the maps to {path_to_csv}/*.json
-with open(f"{path_to_mapping}/firstAuthorPaperCountMap.json", "w") as f:
-    json.dump(firstAuthorPaperCountMap, f)
-with open(f"{path_to_mapping}/firstAuthorWeightedPaperCountMap.json", "w") as f:
-    json.dump(firstAuthorWeightedPaperCountMap, f)
-with open(f"{path_to_mapping}/coAuthorWeightedPaperCountMap.json", "w") as f:
-    json.dump(coAuthorWeightedPaperCountMap, f)
-with open(f"{path_to_mapping}/coAuthorPaperCountMap.json", "w") as f:
-    json.dump(coAuthorPaperCountMap, f)
-with open(f"{path_to_mapping}/topAuthorPaperCountMap.json", "w") as f:
-    json.dump(topAuthorPaperCountMap, f)
+with open(f"{path_to_mapping}/paperCountMap.json", "w") as f:
+    json.dump(paperCountMap, f)
+with open(f"{path_to_mapping}/weightedPaperCountMap.json", "w") as f:
+    json.dump(weightedPaperCountMap, f)
+with open(f"{path_to_mapping}/coWeightedPaperCountMap.json", "w") as f:
+    json.dump(coWeightedPaperCountMap, f)
+with open(f"{path_to_mapping}/coPaperCountMap.json", "w") as f:
+    json.dump(coPaperCountMap, f)
 
 
 
@@ -207,7 +183,6 @@ def compute_count_list(academic_year_list, paper_count_map, start_list=None):
 def compute_total_count(paper_count_map, year):
     academic_year_list = sorted(paper_count_map.keys())
     current_year_index = academic_year_list.index(year)
-    
     total_count = 0
     for i in range(current_year_index):
         total_count += paper_count_map.get(academic_year_list[i], 0)
@@ -218,27 +193,25 @@ def compute_supervisor_rate(studentID, supervisorID, year):
     # if not studentID:
     #     cursorField.execute("select authorOrder from paper_author_field where paperID='%s' and authorID='%s'" % (paperID, supervisorID))
     #     return 1 / float(cursorField.fetchone()[0])
-
     # the sorted list of years that the student has paper publication, truncated to {0,1,..., MAX_ACADEMIC_YEAR}
-    student_academic_years = sorted(list(firstAuthorPaperCountMap[studentID].keys()))[: MAX_ACADEMIC_YEAR + 1]
+    student_academic_years = sorted(list(paperCountMap[studentID].keys()))[: MAX_ACADEMIC_YEAR + 1]
     if not (year in student_academic_years):
         return 0.0
-    
+    #
     yearIndex = student_academic_years.index(year)
     coAuthorID = f"{studentID}-{supervisorID}"
-    faWeightedPaperCountMap = firstAuthorWeightedPaperCountMap[studentID]
-    caWeightedPaperCountMap = coAuthorWeightedPaperCountMap[coAuthorID]
-    
+    faWeightedPaperCountMap = weightedPaperCountMap[studentID]
+    caWeightedPaperCountMap = coWeightedPaperCountMap[coAuthorID]
+    #
     start_student_count = compute_count_list(student_academic_years, faWeightedPaperCountMap)
     end_student_count = compute_count_list(student_academic_years[::-1], faWeightedPaperCountMap)[::-1]
-
     # the same as below except that co-author weighted count is replaced by student weighted count
     total_student_count = start_student_count[yearIndex] + end_student_count[yearIndex] \
         + faWeightedPaperCountMap[year];
-
+    #
     start_coauthor_count = compute_count_list(student_academic_years, caWeightedPaperCountMap, start_student_count)
     end_coauthor_count = compute_count_list(student_academic_years[::-1], caWeightedPaperCountMap, start_student_count)[::-1]
-
+    #
     total_coauthor_count = (
         start_coauthor_count[yearIndex] + end_coauthor_count[yearIndex]
         + caWeightedPaperCountMap[year]
@@ -246,10 +219,9 @@ def compute_supervisor_rate(studentID, supervisorID, year):
             SUPERVISED_PAPER_MODIFIER[int(start_student_count[yearIndex])],
         )
     )
-
     # iterate all possible year span (window) to compute the max supervisedRate
     maxSupervisedRate = 0.0
-
+    maxStart, maxEnd = 0, 0
     for start_year_index in range(0, yearIndex + 1):
         for end_year_index in range(yearIndex, len(student_academic_years)):
             # there is a problem here: the co-authorship can happen in the same year,
@@ -261,25 +233,22 @@ def compute_supervisor_rate(studentID, supervisorID, year):
             #
             if (end_year_index - start_year_index + 1) < MIN_SUPERVISED_YEAR_SPAN:
                 continue
-
             denominator =  total_student_count - start_student_count[start_year_index] - end_student_count[end_year_index]
             if denominator < MIN_SUPERVISED_PAPER_SPAN:
                 continue
-
             numerator =  total_coauthor_count - start_coauthor_count[start_year_index] - end_coauthor_count[end_year_index]
             supervisedRate = numerator / denominator
-
-            maxSupervisedRate = max(maxSupervisedRate, supervisedRate)
-
+            if supervisedRate > maxSupervisedRate:
+                maxSupervisedRate = supervisedRate
+                maxStart, maxEnd = start_year_index, end_year_index
+    #
     maxSupervisedRate = min(1.0, maxSupervisedRate / MIN_SUPERVISED_RATE)
-
     # compute supervising rate
-    total_supervisor_count = compute_total_count(topAuthorPaperCountMap[supervisorID], year)
-    total_coauthor_count = compute_total_count(coAuthorPaperCountMap[coAuthorID], year)
-    
+    total_supervisor_count = compute_total_count(paperCountMap[supervisorID], year)
+    total_coauthor_count = compute_total_count(coPaperCountMap[coAuthorID], year)
     denominator = total_coauthor_count
     numerator = total_supervisor_count - total_coauthor_count
-
+    #
     if numerator < 0:
         print(f"Error in computation, supervisor paper count smaller than co-author paper count: {studentID}, {supervisorID}")
         supervisingRate = 0.0
@@ -289,7 +258,7 @@ def compute_supervisor_rate(studentID, supervisorID, year):
         supervisingRate = MIN_SUPERVISING_RATE
     else:
         supervisingRate = numerator / denominator
-
+    #
     supervisingRate = min(1.0, supervisingRate / MIN_SUPERVISING_RATE)
     # print(paperID, student_academic_years, maxSupervisedRate * supervisingRate)
     return maxSupervisedRate * supervisingRate
@@ -340,7 +309,7 @@ def build_top_author(pairs):
                 if row['firstAuthorID'] == authorID:
                     isKeyPaper = 1
                 else:
-                    isKeyPaper = compute_supervisor_rate(row['firstAuthorID'], authorID, int(row['year']))
+                    isKeyPaper = compute_supervisor_rate(row['firstAuthorID'].iloc[0], authorID, int(row['year']))
             df.at[i, 'isKeyPaper'] = isKeyPaper
             print(row['paperID'], isKeyPaper)
 
