@@ -172,22 +172,23 @@ def get_data_from_table_concurrent(table_name, key='paperID', data=papers):
     return db
 
 print('# getting papers from MAG', datetime.datetime.now().strftime('%H:%M:%S'))
-papers_df = get_data_from_table_concurrent('papers')
-papers_df.to_csv(f'out/{database}/papers.csv',index=False)
+df_papers_MAG = get_data_from_table_concurrent('papers')
+# df_papers_MAG.to_csv(f'out/{database}/papers.csv',index=False)
 
-get_data_from_table_concurrent('paper_author').to_csv(f'out/{database}/paper_author.csv',index=False)
+paper_author_MAG = get_data_from_table_concurrent('paper_author')
+authors=paper_author_MAG['authorID'].drop_duplicates().values
+# paper_author_MAG.to_csv(f'out/{database}/paper_author.csv',index=False)
 
 citing_db = get_data_from_table_concurrent('paper_reference', key='citingpaperID')
 cited_db = get_data_from_table_concurrent('paper_reference', key='citedpaperID')
-db = pd.concat([citing_db, cited_db])
-print('paper_reference original', db.shape)
-db=db.drop_duplicates()
-print('paper_reference drop_duplicates', db.shape)
-db.to_csv(f'out/{database}/paper_reference.csv',index=False)
+df_paper_reference_MAG = pd.concat([citing_db, cited_db])
+print('paper_reference original', df_paper_reference_MAG.shape)
+df_paper_reference_MAG=df_paper_reference_MAG.drop_duplicates()
+print('paper_reference drop_duplicates', df_paper_reference_MAG.shape)
+# df_paper_reference_MAG.to_csv(f'out/{database}/paper_reference.csv',index=False)
 
-paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
-authors=paper_author_MAG['authorID'].drop_duplicates().values
-get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f'out/{database}/authors.csv',index=False)
+authors_MAG = get_data_from_table_concurrent('authors', key='authorID', data=authors)
+# authors_MAG.to_csv(f'out/{database}/authors.csv',index=False)
 
 
 ####################################################################################
@@ -195,31 +196,27 @@ get_data_from_table_concurrent('authors', key='authorID', data=authors).to_csv(f
 # 读取四个子表，并上传到mysql。创建表后添加领域子表的mysql索引（例如在scigene_database_field库）
 ####################################################################################
 print('## uploading papers', datetime.datetime.now().strftime('%H:%M:%S'))
-df_papers_MAG = pd.read_csv(f'out/{database}/papers.csv')
-print(df_papers_MAG)
-print(df_papers_MAG.shape)
+# df_papers_MAG = pd.read_csv(f'out/{database}/papers.csv')
+print(df_papers_MAG, df_papers_MAG.shape)
 df_papers_MAG.to_sql('papers_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=100),\
     "title": sqlalchemy.types.NVARCHAR(length=2000),"ConferenceID": sqlalchemy.types.NVARCHAR(length=15),"JournalID": sqlalchemy.types.NVARCHAR(length=15),\
         "rank":sqlalchemy.types.INTEGER(),"referenceCount":sqlalchemy.types.INTEGER(),"citationCount":sqlalchemy.types.INTEGER(),"PublicationDate":sqlalchemy.types.Date()})
 
 print('## uploading paper_author', datetime.datetime.now().strftime('%H:%M:%S'))
-paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
-print(paper_author_MAG)
-print(paper_author_MAG.shape)
+# paper_author_MAG = pd.read_csv(f'out/{database}/paper_author.csv')
+print(paper_author_MAG, paper_author_MAG.shape)
 paper_author_MAG.to_sql('paper_author_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=15),\
     "authorID": sqlalchemy.types.NVARCHAR(length=15),"authorOrder":sqlalchemy.types.INTEGER()})
 
 print('## uploading paper_reference', datetime.datetime.now().strftime('%H:%M:%S'))
-df_paper_reference_MAG = pd.read_csv(f'out/{database}/paper_reference.csv')
-print(df_paper_reference_MAG)
-print(df_paper_reference_MAG.shape)
+# df_paper_reference_MAG = pd.read_csv(f'out/{database}/paper_reference.csv')
+print(df_paper_reference_MAG, df_paper_reference_MAG.shape)
 df_paper_reference_MAG.to_sql('paper_reference_field',con=engine,if_exists='replace',index=False, dtype={"citingpaperID": sqlalchemy.types.NVARCHAR(length=15),\
     "citedpaperID": sqlalchemy.types.NVARCHAR(length=15)})
 
 print('## uploading authors', datetime.datetime.now().strftime('%H:%M:%S'))
-authors_MAG = pd.read_csv(f'out/{database}/authors.csv')
-print(authors_MAG)
-print(authors_MAG.shape)
+# authors_MAG = pd.read_csv(f'out/{database}/authors.csv')
+print(authors_MAG, authors_MAG.shape)
 authors_MAG.to_sql('authors_field',con=engine,if_exists='replace',index=False, dtype={"authorID": sqlalchemy.types.NVARCHAR(length=15),\
     "name": sqlalchemy.types.NVARCHAR(length=999),"rank":sqlalchemy.types.INTEGER(),"PaperCount":sqlalchemy.types.INTEGER(),"CitationCount":sqlalchemy.types.INTEGER()})
 
@@ -237,7 +234,7 @@ alter table paper_reference_field add index(citedpaperID);
 ALTER TABLE paper_reference_field ADD CONSTRAINT paper_reference_field_pk PRIMARY KEY (citingpaperID,citedpaperID);
 ''')
        
-# 直接update abstract太慢了，使用多进程
+# 直接update abstract太慢了，后续使用多进程下载
 '''
 alter table papers_field ADD abstract mediumtext;
 update papers_field as P, MACG.abstracts as abs set P.abstract = abs.abstract where P.paperID = abs.paperID
