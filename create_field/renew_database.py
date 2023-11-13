@@ -1,4 +1,4 @@
-from utils import *
+from utils import database, execute, try_execute, create_connection, cursor, conn
 import pandas as pd
 import math
 import multiprocessing
@@ -27,7 +27,8 @@ update papers_field as PA, papers_field_citation_timeseries as PM set PA.citatio
 
 #######################################################################
 # update authors_field
-# 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息
+# 计算并添加作者在领域内的论文及引用数量，更新作者的引用总数信息
+# 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
 #######################################################################
 print('updating authors_field')
 

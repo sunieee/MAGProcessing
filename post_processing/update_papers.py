@@ -1,4 +1,4 @@
-from utils import *
+from utils import original_dir, database, cursor, conn
 import pandas as pd
 import os
 import time

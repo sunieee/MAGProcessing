@@ -16,5 +16,5 @@ python renew_database.py > out/$database/renew_database.log
 # python set_fellow.py $2
 
 python match_author.py > out/$database/match_author.log
-# 注意：最后一个脚本在手动筛选之后再运行
+# 注意：最后一个脚本在手动筛选之后放到`out/{database}/filtered.csv`，再运行
 # python merge_author.py > out/$database/merge.log

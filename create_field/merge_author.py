@@ -1,5 +1,5 @@
 import pandas as pd
-from utils import *
+from utils import database, execute, cursor, conn
 from tqdm import tqdm
 
 match_df = pd.read_csv(f'out/{database}/filtered.csv')

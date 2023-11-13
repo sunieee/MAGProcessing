@@ -1,4 +1,4 @@
-from utils import *
+from utils import cursor, conn
 
 
 # src_db = 'scigene_visualization_field'

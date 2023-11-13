@@ -12,7 +12,7 @@ import pandas as pd
 import gensim
 from gensim.parsing.preprocessing import preprocess_string
 import multiprocessing
-from utils import *
+from utils import database, cursor, conn, engine, NumpyEncoder
 
 
 gensim.parsing.preprocessing.STOPWORDS = set()

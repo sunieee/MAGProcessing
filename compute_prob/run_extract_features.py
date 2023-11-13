@@ -1,10 +1,3 @@
-r"""
-compute the cross correlation coefficient between the citation count time series of the citing paper and the cited paper
-parameters: $$citation_link_table_name$$ $$citation_timeseries_table_name$$ ($$feature_name$$)
-==================
-
-"""
-
 from ast import Num
 import os
 import re
@@ -18,11 +11,11 @@ import pandas as pd
 from sqlalchemy import create_engine
 from tqdm import tqdm
 import math
-
-# import MySQLdb
-from utils import *
 from scipy.stats import mannwhitneyu
 from scipy.stats import ttest_ind
+
+# import all needed variable from utils
+from utils import database, nodes, edges, edges_by_cited, edges_by_citing, df_papers_field, df_paper_author_field, engine, conn, cursor
 
 # the overlapping years should be at least MIN_YEAR_SPAN
 MIN_YEAR_SPAN = 5

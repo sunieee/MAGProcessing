@@ -1,11 +1,11 @@
 import pandas as pd
 import time
-from utils import *
+from utils import database, edge_df
+import pymysql
+import os
 from tqdm import tqdm
-from collections import defaultdict
 import json
 import multiprocessing
-from mysql.connector import pooling
 
 authorID_list = edge_df['authorID'].unique()
 

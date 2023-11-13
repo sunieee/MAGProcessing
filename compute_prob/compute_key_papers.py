@@ -1,9 +1,12 @@
 import math
-from utils import *
 import json
 import pandas as pd
 import datetime
+import tqdm
+import multiprocessing
 
+# import all needed variable from utils
+from utils import df_authors_field, df_paper_author_field, df_papers_field, df_paper_author_field_filtered, authorID_list, path_to_mapping, database, conn, cursor, multiproces_num
 
 MIN_STUDENT_AUTHOR_ORDER = 3
 print("Pre-compute first author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
@@ -280,6 +283,11 @@ paperID2FirstAuthorID = df_paper_author_field[df_paper_author_field['authorOrder
 ######################################################################
 print('## start to process each author (key paper)', len(authorID_list), datetime.datetime.now().strftime("%H:%M:%S"))
 
+def toStr(s):
+    if type(s) == str:
+        return s
+    return s.iloc[0]
+
 def build_top_author(pairs):
     authorID_list, order = pairs
     print(order, len(authorID_list))
@@ -309,7 +317,7 @@ def build_top_author(pairs):
                 if row['firstAuthorID'] == authorID:
                     isKeyPaper = 1
                 else:
-                    isKeyPaper = compute_supervisor_rate(row['firstAuthorID'].iloc[0], authorID, int(row['year']))
+                    isKeyPaper = compute_supervisor_rate(toStr(row['firstAuthorID']), authorID, int(row['year']))
             df.at[i, 'isKeyPaper'] = isKeyPaper
             print(row['paperID'], isKeyPaper)
 

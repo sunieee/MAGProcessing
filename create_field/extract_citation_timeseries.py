@@ -2,7 +2,7 @@ import sys
 import time
 import pandas as pd
 from tqdm import tqdm
-from utils import *
+from utils import database, create_connection, execute, executeFetch, try_execute, cursor, conn, engine
 import multiprocessing
 import math
 import numpy as np

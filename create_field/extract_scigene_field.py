@@ -11,7 +11,7 @@ import sqlalchemy
 import concurrent.futures
 import multiprocessing
 import datetime
-from utils import *
+from utils import database, execute, cursor, conn, engine, field_info
 
 engine_MAG = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG', pool_size=20)
 GROUP_SIZE = 2000
@@ -242,3 +242,6 @@ update papers_field as P, MACG.abstracts as abs set P.abstract = abs.abstract wh
 -- delete abstract mediumtext
 ALTER TABLE papers_field DROP abstract;
 '''
+
+cursor.close()
+conn.close()
