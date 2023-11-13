@@ -11,15 +11,15 @@ Note that steps 2 and 3 can be processed in parallel. Additionally, the folders 
 
 ## Keyword Explanation
 
-[**MAG(Microsoft Academic Graph)**](https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/):  The Microsoft Academic Graph is a heterogeneous graph containing scientific publication records, citation relationships between those publications, as well as authors, institutions, journals, conferences, and fields of study. This graph is used to power experiences in Bing, Cortana, Word, and in [Microsoft Academic](https://www.microsoft.com/en-us/research/project/academic/). The graph is currently being updated on a bi-weekly basis until the end of the calendar year 2021.
+[**MAG(Microsoft Academic Graph)**](https://www.microsoft.com/en-us/research/project/microsoft-academic-graph/): The Microsoft Academic Graph is a heterogeneous graph containing scientific publication records, citation relationships between those publications, as well as authors, institutions, journals, conferences, and fields of study. This graph is used to power experiences in Bing, Cortana, Word, and in Microsoft Academic. The graph is currently being updated on a bi-weekly basis until the end of the calendar year 2021.
 
-[**hIndex**](https://en.wikipedia.org/wiki/H-index): The **h-index** is an [author-level metric](https://en.wikipedia.org/wiki/Author-level_metric) that measures both the [productivity](https://en.wikipedia.org/wiki/Productivity) and [citation impact](https://en.wikipedia.org/wiki/Citation_impact) of the [publications](https://en.wikipedia.org/wiki/Scientific_publication), initially used for an individual [scientist](https://en.wikipedia.org/wiki/Scientist) or scholar.
-
-
-[**ACL(Association for Computational Linguistics)**](https://en.wikipedia.org/wiki/Association_for_Computational_Linguistics): is a scientific and professional organization for people working on [natural language processing](https://en.wikipedia.org/wiki/Natural_language_processing). Its namesake conference is one of the primary high impact conferences for natural language processing research, along with [EMNLP](https://en.wikipedia.org/wiki/EMNLP).
+[**hIndex**](https://en.wikipedia.org/wiki/H-index): The h-index is an author-level metric that measures both the productivity and citation impact of the publications, initially used for an individual scientist or scholar.
 
 
-[**ARC(ACL Anthology Reference Corpus)**](https://paperswithcode.com/dataset/acl-arc-1): is an English corpus made up of conference and journal papers in natural language processing and computational linguistics. The corpus has been prepared from 18,288 papers of the ACL Anthology published in 1979–2015.
+[**ACL(Association for Computational Linguistics)**](https://en.wikipedia.org/wiki/Association_for_Computational_Linguistics): a scientific and professional organization for people working on natural language processing. Its namesake conference is one of the primary high impact conferences for natural language processing research, along with EMNLP.
+
+
+[**ARC(ACL Anthology Reference Corpus)**](https://paperswithcode.com/dataset/acl-arc-1): an English corpus made up of conference and journal papers in natural language processing and computational linguistics. The corpus has been prepared from 18,288 papers of the ACL Anthology published in 1979–2015.
 
 
 
