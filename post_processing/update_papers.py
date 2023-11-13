@@ -9,12 +9,16 @@ import math
 import datetime
 import json
 
-paper_dir = f'out/{database}/papers_unprocessed'
-link_dir = f'out/{database}/links'
+paper_dir = f'{original_dir}/papers'
 file_list = os.listdir(paper_dir)
 
-with open(f'out/{database}/paperID2abstract.json', 'r') as f:
+with open(f'{original_dir}/paperID2abstract.json', 'r') as f:
     paperID2abstract = json.load(f)
+
+df_papers_field = pd.read_csv(f'{original_dir}/csv/papers_field.csv')
+df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
+paperID2referenceCount = dict(zip(df_papers_field['paperID'], df_papers_field['referenceCount']))
+paperID2citationCount = dict(zip(df_papers_field['paperID'], df_papers_field['citationCount']))
 
 def extract_paper_authors(pairs):
     papers, info = pairs
@@ -109,11 +113,13 @@ def extract_paper(file):
     papers = pd.read_csv(filepath)
     papers = papers.drop(columns=["authorOrder", "firstAuthorID", "firstAuthorName"])
     papers['paperID'] = papers['paperID'].astype(str)
+    papers['referenceCount'] = papers['paperID'].apply(lambda paperID: paperID2referenceCount[paperID])
+    papers['citationCount'] = papers['paperID'].apply(lambda paperID: paperID2citationCount[paperID])
     papers['venu'] = papers['paperID'].apply(lambda paperID: paperID2venue[paperID])
     papers['authorsName'] = papers['paperID'].apply(lambda paperID: paperID2authorsName[paperID])
     papers['abstract'] = papers['paperID'].apply(lambda paperID: paperID2abstract.get(paperID, ''))
 
-    papers.to_csv(filepath.replace('_unprocessed', ''), index=False)
+    papers.to_csv(f'out/{database}/papers/' + filepath.split('/')[-1], index=False)
 
 multiproces_num = 20
 with multiprocessing.Pool(processes=multiproces_num) as pool:

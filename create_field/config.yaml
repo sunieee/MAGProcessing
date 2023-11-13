@@ -14,6 +14,12 @@ scigene_visualization_field:
     - 59732488  # Visual analytics
   children:     # search the direct children of the fieldID
     - 36464697  # Visualization
+  JournalID:
+    - 10355277
+    - 84775595
+    - 2898150413
+    - 67831204
+    - 55152591
   ConferenceID:
     - 2757964222
     - 2754539197
@@ -30,17 +36,21 @@ scigene_visualization_field:
     - 2898476843
     - 1148385487
     - 2625527217
-  JournalID:
-    - 10355277
-    - 84775595
-    - 2898150413
-    - 67831204
-    - 55152591
+
 
 scigene_database_field:
   fieldID: 
     - 77088390    # Database
     - 2522767166  # Data science: 524553
+  JournalID:
+    - 90119964
+    - 30698027
+    - 78926909
+    - 112141509
+    - 136993123
+    - 174847851
+    - 192650101
+    - 193006928
   ConferenceID:
     - 1168542559
     - 1175089206
@@ -55,15 +65,7 @@ scigene_database_field:
     - 1176514135
     - 1134031032
     - 1156109491
-  JournalID:
-    - 90119964
-    - 30698027
-    - 78926909
-    - 112141509
-    - 136993123
-    - 174847851
-    - 192650101
-    - 193006928
+
 
 scigene_VCG_field:
   fieldID:
@@ -75,6 +77,18 @@ scigene_VCG_field:
     - 121684516 # Computer graphics (images) 
   children:     # search the direct children of the fieldID
     - 36464697  # Visualization
+  JournalID:
+    - 10355277  # VIS
+    - 84775595
+    - 2898150413
+    - 67831204
+    - 55152591
+    - 185367456 # CG
+    - 135221619
+    - 67831204
+    - 17421805
+    - 2898187931
+    - 2898124066
   ConferenceID:
     - 2757964222  # VIS
     - 2754539197
@@ -100,18 +114,28 @@ scigene_VCG_field:
     - 1140059087
     - 2626018664
 
+scigene_physics_field:
+  fieldID: 121332964
+
+scigene_CG_field:
+  fieldID:
+    - 121684516 # Computer graphics (images) 
   JournalID:
-    - 10355277  # VIS
-    - 84775595
-    - 2898150413
-    - 67831204
-    - 55152591
+    - 84775595  # ieee transactions on visualization and computer graphics
+    - 67831204  # computer graphics forum
     - 185367456 # CG
     - 135221619
     - 67831204
     - 17421805
     - 2898187931
     - 2898124066
+  ConferenceID:
+    - 1164321581  # CG
+    - 1165838108
+    - 2758845705
+    - 2754362256
+    - 1132689015
+    - 1200430907
+    - 1140059087
+    - 2626018664
 
-scigene_physics_field:
-  fieldID: 121332964

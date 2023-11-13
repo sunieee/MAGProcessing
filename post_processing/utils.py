@@ -16,11 +16,11 @@ database = os.environ.get('database', 'scigene_visualization_field')
 # filterCondition = f"authorID IN ({ids_string})"
 # print(filterCondition)
 
-edge_df = pd.read_csv(f'out/{database}/edge_proba.csv')
+original_dir = f'../compute_prob/out/{database}'
+edge_df = pd.read_csv(f'{original_dir}/edge_proba.csv')
 edge_df['citingpaperID'] = edge_df['citingpaperID'].astype(str)
 edge_df['citedpaperID'] = edge_df['citedpaperID'].astype(str)
 edge_df['authorID'] = edge_df['authorID'].astype(str)
-
 
 
 engine = create_engine(f"mysql+pymysql://root:root@localhost:3306/{database}?charset=utf8")
