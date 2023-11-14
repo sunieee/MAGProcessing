@@ -2,7 +2,7 @@ import math
 import json
 import pandas as pd
 import datetime
-import tqdm
+from tqdm import tqdm
 import multiprocessing
 
 # import all needed variable from utils

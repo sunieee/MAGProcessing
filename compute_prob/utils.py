@@ -12,8 +12,8 @@ import pandas as pd
 from collections import defaultdict
 
 database = os.environ.get('database', 'scigene_visualization_field')
-# numOfTopAuthors = os.environ.get('numOfTopAuthors', 1100)
-# numOfTopAuthors = int(numOfTopAuthors)
+if os.environ.get('user') != 'root':
+    database = database.replace('scigene', os.environ.get('user'))
 
 multiproces_num = 20
 topN = os.environ.get('topN', 5000)
@@ -33,8 +33,8 @@ topN = int(topN)
 
 def create_connection(database):
     conn = pymysql.connect(host='localhost',
-                                user='root',
-                                password='root',
+                                user=os.environ.get('user'),
+                                password=os.environ.get('password'),
                                 db=database,
                                 charset='utf8')
     return conn, conn.cursor()
@@ -45,7 +45,8 @@ def init_connection(database):
         return create_connection(database)
     except:
         # Connect to the MySQL server without selecting a database
-        conn = pymysql.connect(host='localhost', user='root', password='root')
+        conn = pymysql.connect(host='localhost', user=os.environ.get('user'), 
+                               password=os.environ.get('password'))
         cursor = conn.cursor()
         cursor.execute(f"SHOW DATABASES LIKE '{database}'")
         if not cursor.fetchone():
@@ -54,7 +55,8 @@ def init_connection(database):
         return create_connection(database)
     
 conn, cursor = init_connection(database)
-engine = create_engine(f"mysql+pymysql://root:root@192.168.0.140:3306/{database}?charset=utf8")
+userpass = f'{os.environ.get("user")}:{os.environ.get("password")}'
+engine = create_engine(f"mysql+pymysql://{userpass}@192.168.0.140:3306/{database}?charset=utf8")
 
 
 # 当你使用pymysql直接创建的连接，它返回的是一个原生的MySQL连接，

@@ -13,7 +13,8 @@ import multiprocessing
 import datetime
 from utils import database, execute, cursor, conn, engine, field_info
 
-engine_MAG = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG', pool_size=20)
+userpass = f'{os.environ.get("user")}:{os.environ.get("password")}'
+engine_MAG = create_engine(f'mysql+pymysql://{userpass}@192.168.0.140:3306/MACG', pool_size=20)
 GROUP_SIZE = 2000
 multiproces_num = 20
 
@@ -24,7 +25,7 @@ multiproces_num = 20
 
 def get_paperID_batch(pair):
     fieldID, offset, ix, pbar, verbose = pair
-    engine = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG')
+    engine = create_engine(f'mysql+pymysql://{userpass}@192.168.0.140:3306/MACG')
     sql_data = f'select paperID from papers_field where fieldID=\'{fieldID}\' LIMIT {GROUP_SIZE} OFFSET {offset};'
     # if verbose:
     #     time = datetime.datetime.now().strftime('%H:%M:%S')
@@ -140,7 +141,7 @@ def get_data_from_table_concurrent(table_name, key='paperID', data=papers):
 
     def _query(pair):
         MAG_group, index, pbar = pair
-        engine = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/MACG')
+        engine = create_engine(f'mysql+pymysql://{userpass}@192.168.0.140:3306/MACG')
         sql=f'''select * from {table_name} where '''\
               + key + ' in ('+','.join([f'\'{x}\'' for x in MAG_group])+')'
         # time = datetime.datetime.now().strftime('%H:%M:%S')

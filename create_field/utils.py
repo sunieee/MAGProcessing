@@ -9,6 +9,8 @@ import os
 
 
 database = os.environ.get('database', 'scigene_database_field')
+if os.environ.get('user') != 'root':
+    database = database.replace('scigene', os.environ.get('user'))
 
 # read config.yaml
 import yaml
@@ -16,16 +18,11 @@ with open('config.yaml') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 field_info = config[database]
 
-# database_mapping = {
-#     '77088390': 'scigene_database_field',
-#     '121332964': 'scigene_physics_field'
-# }
-# database = database_mapping[field_]
 
 def create_connection(database):
     conn = pymysql.connect(host='localhost',
-                                user='root',
-                                password='root',
+                                user=os.environ.get('user'),
+                                password=os.environ.get('password'),
                                 db=database,
                                 charset='utf8')
     return conn, conn.cursor()
@@ -36,7 +33,7 @@ def init_connection(database):
         return create_connection(database)
     except:
         # Connect to the MySQL server without selecting a database
-        conn = pymysql.connect(host='localhost', user='root', password='root')
+        conn = pymysql.connect(host='localhost', user=os.environ.get('user'), password=os.environ.get('password'))
         cursor = conn.cursor()
         cursor.execute(f"SHOW DATABASES LIKE '{database}'")
         if not cursor.fetchone():
@@ -46,8 +43,9 @@ def init_connection(database):
         return create_connection(database)
 
 
+userpass = f'{os.environ.get("user")}:{os.environ.get("password")}'
 conn, cursor = init_connection(database)
-engine = create_engine('mysql+pymysql://root:root@192.168.0.140:3306/'+database)
+engine = create_engine(f'mysql+pymysql://{userpass}@192.168.0.140:3306/'+database)
 
 
 def execute(sql):

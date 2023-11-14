@@ -41,8 +41,8 @@ def extract_paper_abstract(pairs):
     print('extract_paper_abstract', len(papers), info)
     conn = pymysql.connect(host='localhost',
                             port=3306,
-                            user='root',
-                            password='root',
+                            user=os.environ.get('user'),
+                            password=os.environ.get('password'),
                             db='MACG',
                             charset='utf8')
     cursor = conn.cursor()

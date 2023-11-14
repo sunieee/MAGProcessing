@@ -1,9 +1,9 @@
-set -e
-
+export user=root
+export password=root
 # export database=scigene_visualization_field
 # export database=scigene_database_field
-# export database=scigene_VCG_field
-export database=scigene_CG_field
+export database=scigene_VCG_field
+# export database=scigene_CG_field
 export topN=5000
 
 # rm -rf out/$database

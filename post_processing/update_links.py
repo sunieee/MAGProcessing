@@ -1,23 +1,19 @@
 import pandas as pd
 import time
-from utils import database, edge_df
 import pymysql
 import os
 from tqdm import tqdm
 import json
 import multiprocessing
+from utils import create_connection, database, original_dir
 
+edge_df = pd.read_csv(f'{original_dir}/edge_proba.csv')
+for col in ['citingpaperID', 'citedpaperID', 'authorID']:
+    edge_df[col] = edge_df[col].astype(str)
 authorID_list = edge_df['authorID'].unique()
 
 def fetch_citation_context(pairs):
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db='MACG',
-                            charset='utf8')
-    cursor = conn.cursor()
-
+    conn, cursor = create_connection('MACG')
     dic = {}
     for pair in tqdm(pairs):
         citingpaperID, citedpaperID = pair
@@ -28,7 +24,6 @@ def fetch_citation_context(pairs):
         result = cursor.fetchall()
         dic[citingpaperID + ',' + citedpaperID] = '\t'.join([row[0] for row in result])
 
-    cursor.close()
     conn.close()
     return dic
         

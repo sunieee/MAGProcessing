@@ -1,4 +1,5 @@
-from utils import original_dir, database, cursor, conn
+
+import pymysql
 import pandas as pd
 import os
 import time
@@ -8,6 +9,7 @@ from collections import defaultdict
 import math
 import datetime
 import json
+from utils import create_connection, database, original_dir
 
 paper_dir = f'{original_dir}/papers'
 file_list = os.listdir(paper_dir)
@@ -23,13 +25,7 @@ paperID2citationCount = dict(zip(df_papers_field['paperID'], df_papers_field['ci
 def extract_paper_authors(pairs):
     papers, info = pairs
     print('extract_paper_authors', len(papers), info)
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=database,
-                            charset='utf8')
-    cursor = conn.cursor()
+    conn, cursor = create_connection(database)
     _paperID2authorsName = defaultdict(list)
 
     # 使用IN子句一次查询多个paperID
@@ -46,38 +42,37 @@ def extract_paper_authors(pairs):
         _paperID2authorsName[paperID].append(name)
     for paperID, names in _paperID2authorsName.items():
         _paperID2authorsName[paperID] = ', '.join(names)
-
-    cursor.close()
     conn.close()
     return _paperID2authorsName
 
 
+def valid_venue(venu):
+    if venu is None:
+        return False
+    if venu in ['None', ' ', '', '0']:
+        return False
+    return True
+
 def extract_paper_venu(papers):
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user='root',
-                            password='root',
-                            db=database,
-                            charset='utf8')
-    cursor = conn.cursor()
+    conn, cursor = create_connection(database)
     _paperID2venue = {}
     for paperID in tqdm(papers):
         cursor.execute(f"select ConferenceID, JournalID from papers_field where paperID='{paperID}'")
         result = cursor.fetchone()
+        # print(result)
         venu = None
-        if result[0] != '0':
+        if valid_venue(result[0]):
             cursor.execute("select abbreviation, name from MACG.conferences where conferenceID=%s", (result[0],))
             res = cursor.fetchone()
-            if res != None:
+            if valid_venue(res):
                 venu = res[1] + ' (' + res[0] + ')'
-        elif result[1] != '0':
+        elif valid_venue(result[1]):
             cursor.execute("select name from MACG.journals where journalID=%s", (result[1],))
             res = cursor.fetchone()
             if res != None:
                 venu = res[0]
         _paperID2venue[paperID] = venu
 
-    cursor.close()
     conn.close()
     return _paperID2venue
 
@@ -121,10 +116,23 @@ def extract_paper(file):
 
     papers.to_csv(f'out/{database}/papers/' + filepath.split('/')[-1], index=False)
 
+    core_papers = papers[papers['isKeyPaper'] > 0.5]
+    core_citations = core_papers['citationCount'].to_list()
+    core_citations.sort(reverse=True)
+    return {
+        'authorID': file.split('.')[0],
+        'CorePaperCount_field': len(core_papers),
+        'CoreCitationCount_field': core_papers['citationCount'].sum(),
+        'CorehIndex_field': sum(1 for i, citation in enumerate(core_citations) if citation > i)
+    }
+
 multiproces_num = 20
 with multiprocessing.Pool(processes=multiproces_num) as pool:
-    pool.map(extract_paper, file_list)
+    results = pool.map(extract_paper, file_list)
 
-cursor.close()
-conn.close()
+df = pd.DataFrame(results)
+top_field_authors = pd.read_csv(f'{original_dir}/top_field_authors.csv')
+top_field_authors['authorID'] = top_field_authors['authorID'].astype(str)
+top_field_authors = top_field_authors.merge(df, on='authorID')
 
+top_field_authors.to_csv(f'out/{database}/top_field_authors.csv', index=False)
