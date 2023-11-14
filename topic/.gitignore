@@ -1,8 +1,7 @@
-csv
-csv2
-input
-model
-output
-vis_output
-vis_output2
+csv/*
+input/*
+model/*
+output/*
+paper/*
+version/*
 *.csv
