@@ -126,8 +126,8 @@ with open(f"{path_to_mapping}/coPaperCountMap.json", "w") as f:
 
 
 
-MIN_SUPERVISOR_RATE = 0.5
-MIN_SUPERVISED_RATE = 0.6
+MIN_SUPERVISOR_RATE = 0.3
+MIN_SUPERVISED_RATE = 1
 MIN_SUPERVISING_RATE = 1
 MIN_SUPERVISED_YEAR_SPAN = 2
 MIN_SUPERVISED_PAPER_SPAN = 2.1
@@ -321,7 +321,7 @@ def build_top_author(pairs):
             df.at[i, 'isKeyPaper'] = isKeyPaper
             print(row['paperID'], isKeyPaper)
 
-        df.to_csv(f'out/{database}/papers/{authorID}.csv', index=False)
+        df.to_csv(f'out/{database}/papers_raw/{authorID}.csv', index=False)
 
 
 with multiprocessing.Pool(processes=multiproces_num) as pool:

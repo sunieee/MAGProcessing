@@ -1,7 +1,4 @@
-csv/*
-input/*
-model/*
-output/*
-paper/*
-version/*
-*.csv
+csv
+input
+model
+output

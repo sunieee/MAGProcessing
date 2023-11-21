@@ -9,15 +9,28 @@ from collections import defaultdict
 import math
 import datetime
 import json
-from utils import create_connection, database, original_dir
 
-paper_dir = f'{original_dir}/papers'
+
+database = os.environ.get('database', 'scigene_visualization_field')
+if os.environ.get('user') != 'root':
+    database = database.replace('scigene', os.environ.get('user'))
+    
+
+def create_connection(database):
+    conn = pymysql.connect(host='localhost',
+                                user=os.environ.get('user'),
+                                password=os.environ.get('password'),
+                                db=database,
+                                charset='utf8')
+    return conn, conn.cursor()
+
+paper_dir = f'out/{database}/papers_raw'
 file_list = os.listdir(paper_dir)
 
-with open(f'{original_dir}/paperID2abstract.json', 'r') as f:
+with open(f'out/{database}/paperID2abstract.json', 'r') as f:
     paperID2abstract = json.load(f)
 
-df_papers_field = pd.read_csv(f'{original_dir}/csv/papers_field.csv')
+df_papers_field = pd.read_csv(f'out/{database}/csv/papers_field.csv')
 df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
 paperID2referenceCount = dict(zip(df_papers_field['paperID'], df_papers_field['referenceCount']))
 paperID2citationCount = dict(zip(df_papers_field['paperID'], df_papers_field['citationCount']))
@@ -131,8 +144,12 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper, file_list)
 
 df = pd.DataFrame(results)
-top_field_authors = pd.read_csv(f'{original_dir}/top_field_authors.csv')
+top_field_authors = pd.read_csv(f'out/{database}/top_field_authors.csv')
 top_field_authors['authorID'] = top_field_authors['authorID'].astype(str)
+# remove columns in top_field_authors if exist: ['CorePaperCount_field', 'CoreCitationCount_field', 'CorehIndex_field']
+for col in ['CorePaperCount_field', 'CoreCitationCount_field', 'CorehIndex_field']:
+    if col in top_field_authors.columns:
+        top_field_authors = top_field_authors.drop(columns=[col])
 top_field_authors = top_field_authors.merge(df, on='authorID')
 
 top_field_authors.to_csv(f'out/{database}/top_field_authors.csv', index=False)

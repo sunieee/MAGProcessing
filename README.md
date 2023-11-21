@@ -5,9 +5,8 @@ MAG Data Processing is a comprehensive pipeline designed to process data from th
 1. **create_field**: Creating a specialized database based on fields, conferences, and journals.
 2. **compute_prob**: Computing the probabilities of papers and citations, also referred to as node and edge probabilities.
 3. **topic**: Determining topics by analyzing the abstracts and titles of papers, especially those from top authors in a given field.
-4. **post_processing**: Implementing post-processing steps to integrate contextual information such as abstracts, authors, and venues, making the data ready for use in GFVis.
 
-Note that steps 2 and 3 can be processed in parallel. Additionally, the folders are named identically to their corresponding titles for ease of reference.
+The folders are named identically to their corresponding titles for ease of reference.
 
 ## Keyword Explanation
 

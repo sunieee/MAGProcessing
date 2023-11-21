@@ -1,7 +1,7 @@
 # 生成某一领域topic分布和paper-topic对应关系的脚本
 python save_version.py
 fieldType="visualization"   # TODO 根据不同的field改动
-cp /home/sy/arc/post_processing/out/scigene_${fieldType}_field/papers/* input/${fieldType}/
+cp ../post_processing/out/scigene_${fieldType}_field/papers/* input/${fieldType}/
 python bertopic_title_abstract.py ${fieldType} 1 1> output/${fieldType}/bertopic.txt
 
 python merge_word.py ${fieldType}

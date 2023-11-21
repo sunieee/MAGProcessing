@@ -5,9 +5,21 @@ import os
 from tqdm import tqdm
 import json
 import multiprocessing
-from utils import create_connection, database, original_dir
 
-edge_df = pd.read_csv(f'{original_dir}/edge_proba.csv')
+
+database = os.environ.get('database', 'scigene_visualization_field')
+if os.environ.get('user') != 'root':
+    database = database.replace('scigene', os.environ.get('user'))
+
+def create_connection(database):
+    conn = pymysql.connect(host='localhost',
+                                user=os.environ.get('user'),
+                                password=os.environ.get('password'),
+                                db=database,
+                                charset='utf8')
+    return conn, conn.cursor()
+
+edge_df = pd.read_csv(f'out/{database}/edge_proba.csv')
 for col in ['citingpaperID', 'citedpaperID', 'authorID']:
     edge_df[col] = edge_df[col].astype(str)
 authorID_list = edge_df['authorID'].unique()
