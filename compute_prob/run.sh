@@ -17,14 +17,14 @@ run() {
     mkdir -p out/$database/{papers_raw,papers,links,log}
 
     # compute node
-    # python compute_key_papers.py > out/$database/log/compute_key_papers.log
+    python compute_key_papers.py > out/$database/log/compute_key_papers.log
     python update_papers.py > out/$database/log/update_papers.log
 
     # compute edge
-    # python compute_similarity_features.py > out/$database/log/compute_similarity_features.log
-    # python run_extract_features.py > out/$database/log/run_extract_features.log
-    # python compute_link_prob.py > out/$database/log/compute_proba.log
-    # python update_links.py > out/$database/log/update_links.log
+    python compute_similarity_features.py > out/$database/log/compute_similarity_features.log
+    python run_extract_features.py > out/$database/log/run_extract_features.log
+    python compute_link_prob.py > out/$database/log/compute_proba.log
+    python update_links.py > out/$database/log/update_links.log
 
     # draw distribution
     python analyse_distribution.py > out/$database/log/analyse_distribution.log
@@ -44,3 +44,5 @@ run scigene_database_field
 
 # rsync -a out/scigene_visualization_field/ root@82.156.152.182:/home/xfl/pyCode/GFVis/csv/scigene_visualization_field/ --progress=info2
 # rsync -a out/scigene_database_field/ root@82.156.152.182:/home/xfl/pyCode/GFVis/csv/scigene_database_field/ --progress=info2
+
+# rsync -a output xiaofengli@120.55.163.114:/home/xiaofengli/pyCode/GFVis/csv/ --progress=info2

@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import glob
 import os
+import math
 
 database = os.environ.get('database', 'scigene_visualization_field')
 
@@ -29,11 +30,11 @@ def analyze_csv(filename, column_name):
     mean = df[column_name].mean()
     variance = df[column_name].var()
 
-    print(f"0 ratio of {column_name}: {count0/len(df)}")
-    print(f"Not 0/1 ratio of {column_name}: {count/len(df)}")
-    print(f"1 ratio of {column_name}: {count1/len(df)}")
-    print(f"Mean of {column_name}: {mean}")
-    print(f"Variance of {column_name}: {variance}")
+    print(f"0 ratio of {column_name}: {round(count0/len(df), 3)}")
+    print(f"Not 0/1 ratio of {column_name}: {round(count/len(df), 3)}")
+    print(f"1 ratio of {column_name}: {round(count1/len(df), 3)}")
+    print(f"Mean of {column_name}: {round(mean, 3)}")
+    print(f"Variance of {column_name}: {round(variance, 3)}")
 
     # 绘制分布图
     plt.figure(figsize=(10, 6))
