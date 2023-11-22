@@ -13,30 +13,27 @@ export topN=5000
 run() {
     database=$1
     export database=$database
-    # rm -rf out/$database
-    mkdir -p out/$database/papers_raw
-    mkdir -p out/$database/papers
-    mkdir -p out/$database/links
-    mkdir -p out/$database/log
+    # rm -rf out/$database/{papers_raw,papers,links,log}
+    mkdir -p out/$database/{papers_raw,papers,links,log}
 
     # compute node
-    python compute_key_papers.py > out/$database/log/compute_key_papers.log
+    # python compute_key_papers.py > out/$database/log/compute_key_papers.log
     python update_papers.py > out/$database/log/update_papers.log
 
     # compute edge
-    python compute_similarity_features.py > out/$database/log/compute_similarity_features.log
-    python run_extract_features.py > out/$database/log/run_extract_features.log
-    python compute_link_prob.py > out/$database/log/compute_proba.log
-    python update_links.py > out/$database/log/update_links.log
+    # python compute_similarity_features.py > out/$database/log/compute_similarity_features.log
+    # python run_extract_features.py > out/$database/log/run_extract_features.log
+    # python compute_link_prob.py > out/$database/log/compute_proba.log
+    # python update_links.py > out/$database/log/update_links.log
 
     # draw distribution
     python analyse_distribution.py > out/$database/log/analyse_distribution.log
 }
 
 
-run scigene_VCG_field
-# run scigene_visualization_field
-# run scigene_database_field
+# run scigene_VCG_field
+run scigene_visualization_field
+run scigene_database_field
 # run scigene_CG_field
 # run scigene_acl_anthology
 

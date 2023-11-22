@@ -7,7 +7,7 @@ import os
 database = os.environ.get('database', 'scigene_visualization_field')
 
 # 1. 加载模型
-with open('out/saved_model.pickle', 'rb') as file:
+with open('saved_model.pickle', 'rb') as file:
     model = pickle.load(file)
 
 # 2. 读取测试数据
