@@ -9,9 +9,6 @@ import os
 
 
 database = os.environ.get('database', 'scigene_database_field')
-if os.environ.get('user') != 'root':
-    database = database.replace('scigene', os.environ.get('user'))
-
 # read config.yaml
 import yaml
 with open('config.yaml') as f:

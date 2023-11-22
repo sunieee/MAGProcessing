@@ -197,6 +197,9 @@ def compute_supervisor_rate(studentID, supervisorID, year):
     #     cursorField.execute("select authorOrder from paper_author_field where paperID='%s' and authorID='%s'" % (paperID, supervisorID))
     #     return 1 / float(cursorField.fetchone()[0])
     # the sorted list of years that the student has paper publication, truncated to {0,1,..., MAX_ACADEMIC_YEAR}
+    if studentID not in paperCountMap:
+        print(studentID, 'not found in paperCountMap!')
+        return 0.0
     student_academic_years = sorted(list(paperCountMap[studentID].keys()))[: MAX_ACADEMIC_YEAR + 1]
     if not (year in student_academic_years):
         return 0.0
@@ -204,7 +207,11 @@ def compute_supervisor_rate(studentID, supervisorID, year):
     yearIndex = student_academic_years.index(year)
     coAuthorID = f"{studentID}-{supervisorID}"
     faWeightedPaperCountMap = weightedPaperCountMap[studentID]
-    caWeightedPaperCountMap = coWeightedPaperCountMap[coAuthorID]
+    try:
+        caWeightedPaperCountMap = coWeightedPaperCountMap[coAuthorID]
+    except Exception as e:
+        print(coAuthorID, 'not found in caWeightedPaperCountMap!')
+        return 0.0
     #
     start_student_count = compute_count_list(student_academic_years, faWeightedPaperCountMap)
     end_student_count = compute_count_list(student_academic_years[::-1], faWeightedPaperCountMap)[::-1]

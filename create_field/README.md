@@ -5,7 +5,12 @@ Creating a specialized database tailored to specific academic fields based on fi
 
 ## pipeline
 
-The pipeline is outlined in `run.sh`. Before executing, it is necessary to change `export database=scigene_VCG_field` to the specified field database. Also, define the corresponding `fieldID, children, ConferenceID, and JournalID` for the field in config.yaml. These parameters represent the field covered by the database, the fields for which sub-domains need to be searched, and the associated conferences and journals.
+The pipeline is outlined in `run.sh`. Before executing, it is necessary to:
+- change `user, password` to `visitor, visdata2023`
+- change `export database=scigene_VCG_field` to the specified field database, use `visitor` as prefix, like `export database=visitor_HCI_field`.
+- define the corresponding `fieldID, children, ConferenceID, and JournalID` for the field in config.yaml. 
+
+These parameters represent the field covered by the database, the fields for which sub-domains need to be searched, and the associated conferences and journals.
 
 1. **extract_scigene_field.py**:
     - Creates a basic database for the field.

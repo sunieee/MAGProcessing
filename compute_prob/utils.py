@@ -12,12 +12,10 @@ import pandas as pd
 from collections import defaultdict
 
 database = os.environ.get('database', 'scigene_visualization_field')
-if os.environ.get('user') != 'root':
-    database = database.replace('scigene', os.environ.get('user'))
-
 multiproces_num = 20
 topN = os.environ.get('topN', 5000)
 topN = int(topN)
+suffix = 'ARC' if database.count("acl_anthology") else 'field'
 
 # 对于 authorID 的限制
 # with open('out/test.txt', 'r') as f:
@@ -106,10 +104,10 @@ def try_execute(sql, cursor=cursor):
         pass
     conn.commit()
 
-cursor.execute(f'select hIndex_field from authors_field order by hIndex_field desc limit 1 offset {topN}')
+cursor.execute(f'select hIndex_{suffix} from authors_{suffix} order by hIndex_{suffix} desc limit 1 offset {topN}')
 hIndex0 = cursor.fetchone()[0]
 print('MIN hIndex:', hIndex0)
-filterCondition = f'hIndex_field >= {hIndex0}'
+filterCondition = f'hIndex_{suffix} >= {hIndex0}'
 
 top_field_authors_path = f'out/{database}/top_field_authors.csv'
 if os.path.exists(top_field_authors_path):
@@ -117,7 +115,7 @@ if os.path.exists(top_field_authors_path):
     top_field_authors_df = pd.read_csv(top_field_authors_path)
 else:
     print('top_field_authors.csv not exists')
-    top_field_authors_df = pd.read_sql(f"""select * from authors_field
+    top_field_authors_df = pd.read_sql(f"""select * from authors_{suffix}
         where {filterCondition}""", conn)
     top_field_authors_df.to_csv(top_field_authors_path, index=False)
 
@@ -129,16 +127,16 @@ print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S")
 path_to_mapping = f"out/{database}/csv"
 if not os.path.exists(path_to_mapping):
     os.makedirs(path_to_mapping)
-    df_paper_author_field = pd.read_sql_query(f"select * from paper_author_field", conn)
+    df_paper_author_field = pd.read_sql_query(f"select * from paper_author_{suffix}", conn)
     df_paper_author_field.to_csv(f"{path_to_mapping}/paper_author_field.csv", index=False)
     
-    df_papers_field = pd.read_sql_query(f"select * from papers_field", conn)
+    df_papers_field = pd.read_sql_query(f"select * from papers_{suffix}", conn)
     df_papers_field.to_csv(f"{path_to_mapping}/papers_field.csv", index=False)
 
-    df_authors_field = pd.read_sql_query(f"select * from authors_field", conn)
+    df_authors_field = pd.read_sql_query(f"select * from authors_{suffix}", conn)
     df_authors_field.to_csv(f"{path_to_mapping}/authors_field.csv", index=False)
 
-    df_paper_reference_field = pd.read_sql_query(f"select * from paper_reference_field", conn)
+    df_paper_reference_field = pd.read_sql_query(f"select * from paper_reference_{suffix}", conn)
     df_paper_reference_field.to_csv(f"{path_to_mapping}/paper_reference_field.csv", index=False)
 else:
     df_paper_author_field = pd.read_csv(f"{path_to_mapping}/paper_author_field.csv")

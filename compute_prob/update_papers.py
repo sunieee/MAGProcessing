@@ -12,9 +12,7 @@ import json
 
 
 database = os.environ.get('database', 'scigene_visualization_field')
-if os.environ.get('user') != 'root':
-    database = database.replace('scigene', os.environ.get('user'))
-    
+suffix = 'ARC' if database.count("acl_anthology") else 'field'
 
 def create_connection(database):
     conn = pymysql.connect(host='localhost',
@@ -27,13 +25,68 @@ def create_connection(database):
 paper_dir = f'out/{database}/papers_raw'
 file_list = os.listdir(paper_dir)
 
-with open(f'out/{database}/paperID2abstract.json', 'r') as f:
-    paperID2abstract = json.load(f)
-
 df_papers_field = pd.read_csv(f'out/{database}/csv/papers_field.csv')
 df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
+if 'referenceCount' not in df_papers_field.columns:
+    df_papers_field['referenceCount'] = -1
+top_field_authors = pd.read_csv(f'out/{database}/top_field_authors.csv')
+top_field_authors['authorID'] = top_field_authors['authorID'].astype(str)
+
+authorID_list = top_field_authors['authorID'].tolist()
+df_paper_author_field = pd.read_csv(f"out/{database}/csv/paper_author_field.csv")
+df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
+df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
+
+df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
+paperID_list = df_paper_author_field_filtered['paperID'].drop_duplicates().tolist()
 paperID2referenceCount = dict(zip(df_papers_field['paperID'], df_papers_field['referenceCount']))
 paperID2citationCount = dict(zip(df_papers_field['paperID'], df_papers_field['citationCount']))
+
+
+def extract_paper_abstract(pairs):
+    papers, info = pairs
+    print('extract_paper_abstract', len(papers), info)
+    conn = pymysql.connect(host='localhost',
+                            port=3306,
+                            user=os.environ.get('user'),
+                            password=os.environ.get('password'),
+                            db='MACG',
+                            charset='utf8')
+    cursor = conn.cursor()
+    _paperID2abstract = defaultdict(str)
+
+    # 使用IN子句一次查询多个paperID
+    # 这个太重要了！！！！！！！ paperID一定要加引号，不然慢1w倍，1s变成10h
+    paper_ids_str = ', '.join([f"'{x}'" for x in papers])
+    sql = f"""SELECT paperID, abstract FROM abstracts WHERE paperID IN ({paper_ids_str}) ;"""
+    # print('*', sql)
+    cursor.execute(sql)
+    result = cursor.fetchall()
+
+    # 使用Python代码来组合结果
+    for paperID, abstract in result:
+        _paperID2abstract[paperID] = abstract
+
+    cursor.close()
+    conn.close()
+    return _paperID2abstract
+
+if os.path.exists(f"out/{database}/paperID2abstract.json"):
+    with open(f"out/{database}/paperID2abstract.json") as f:
+        paperID2abstract = json.load(f)
+else:
+    paperID2abstract = defaultdict(str)
+    multiproces_num = 20
+    group_size = 1000
+    group_length = math.ceil(len(paperID_list)/group_size)
+    with multiprocessing.Pool(processes=multiproces_num * 3) as pool:
+        results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
+        for result in results:
+            paperID2abstract.update(result)
+    print('finish extract_paper_abstract', len(paperID2abstract))
+    with open(f"out/{database}/paperID2abstract.json", 'w') as f:
+        json.dump(paperID2abstract, f)
+
 
 def extract_paper_authors(pairs):
     papers, info = pairs
@@ -43,11 +96,11 @@ def extract_paper_authors(pairs):
 
     # 使用IN子句一次查询多个paperID
     paper_ids_str = ', '.join([f"'{x}'" for x in papers])
-    cursor.execute(f"""SELECT paper_author_field.paperID, authors_field.name
-                       FROM paper_author_field 
-                       JOIN authors_field ON paper_author_field.authorID=authors_field.authorID 
-                       WHERE paper_author_field.paperID IN ({paper_ids_str})
-                       ORDER BY paper_author_field.paperID, paper_author_field.authorOrder;""")
+    cursor.execute(f"""SELECT paper_author_{suffix}.paperID, authors_{suffix}.name
+                       FROM paper_author_{suffix} 
+                       JOIN authors_{suffix} ON paper_author_{suffix}.authorID=authors_{suffix}.authorID 
+                       WHERE paper_author_{suffix}.paperID IN ({paper_ids_str})
+                       ORDER BY paper_author_{suffix}.paperID, paper_author_{suffix}.authorOrder;""")
     result = cursor.fetchall()
 
     # 使用Python代码来组合结果
@@ -67,10 +120,12 @@ def valid_venue(venu):
     return True
 
 def extract_paper_venu(papers):
+    if database.count("acl_anthology"):
+        return {}
     conn, cursor = create_connection(database)
     _paperID2venue = {}
     for paperID in tqdm(papers):
-        cursor.execute(f"select ConferenceID, JournalID from papers_field where paperID='{paperID}'")
+        cursor.execute(f"select ConferenceID, JournalID from papers_{suffix} where paperID='{paperID}'")
         result = cursor.fetchone()
         # print(result)
         venu = None
@@ -144,8 +199,6 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper, file_list)
 
 df = pd.DataFrame(results)
-top_field_authors = pd.read_csv(f'out/{database}/top_field_authors.csv')
-top_field_authors['authorID'] = top_field_authors['authorID'].astype(str)
 # remove columns in top_field_authors if exist: ['CorePaperCount_field', 'CoreCitationCount_field', 'CorehIndex_field']
 for col in ['CorePaperCount_field', 'CoreCitationCount_field', 'CorehIndex_field']:
     if col in top_field_authors.columns:

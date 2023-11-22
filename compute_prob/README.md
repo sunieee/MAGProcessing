@@ -4,7 +4,11 @@ Computing the probabilities of papers and citations, also referred to as node an
 
 ## pipeline
 
-The pipeline is defined in `run.sh`. Before execution, modify `export database=scigene_VCG_field` to target the specified field database. The default topN is set to 5000, indicating that the process will focus on the top 5000 authors sorted by hIndex.
+The pipeline is defined in `run.sh`. Before execution, it is necessary to:
+- change `user, password` to `visitor, visdata2023`
+- change `export database=scigene_VCG_field` to the specified field database, use `visitor` as prefix, like `export database=visitor_HCI_field`.
+
+The default topN is set to 5000, indicating that the process will focus on the top 5000 authors sorted by hIndex.
 
 1. **compute_key_papers.py**
    - **compute_key_papers.py** - Calculates the probability of papers for the specified author database.

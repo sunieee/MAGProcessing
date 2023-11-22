@@ -47,8 +47,8 @@ def analyze_csv(filename, column_name):
     plt.tight_layout()
 
     # 保存分布图
-    plt.savefig(f"out/{database}/{column_name}_distribution.png")
-    print(f"save distribution to out/{database}/{column_name}_distribution.png")
+    plt.savefig(f"out/{database}/log/{column_name}_distribution.png")
+    print(f"save distribution to out/{database}/log/{column_name}_distribution.png")
     # plt.show()
 
 # 使用

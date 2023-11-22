@@ -8,9 +8,6 @@ import multiprocessing
 
 
 database = os.environ.get('database', 'scigene_visualization_field')
-if os.environ.get('user') != 'root':
-    database = database.replace('scigene', os.environ.get('user'))
-
 def create_connection(database):
     conn = pymysql.connect(host='localhost',
                                 user=os.environ.get('user'),

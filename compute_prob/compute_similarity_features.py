@@ -34,51 +34,8 @@ with open(f'out/{database}/paperID_list.txt', 'r') as f:
 # RETRAIN_GENSIM = False 时，加载已经训练好的模型，并使用它来推断新的文档向量
 ############################################################
 # read all the selected papers in MAG
-db_suffix = 'ARC' if database=="scigene_acl_anthology" else 'field'
-
-def extract_paper_abstract(pairs):
-    papers, info = pairs
-    print('extract_paper_abstract', len(papers), info)
-    conn = pymysql.connect(host='localhost',
-                            port=3306,
-                            user=os.environ.get('user'),
-                            password=os.environ.get('password'),
-                            db='MACG',
-                            charset='utf8')
-    cursor = conn.cursor()
-    _paperID2abstract = defaultdict(str)
-
-    # 使用IN子句一次查询多个paperID
-    # 这个太重要了！！！！！！！ paperID一定要加引号，不然慢1w倍，1s变成10h
-    paper_ids_str = ', '.join([f"'{x}'" for x in papers])
-    sql = f"""SELECT paperID, abstract FROM abstracts WHERE paperID IN ({paper_ids_str}) ;"""
-    # print('*', sql)
-    cursor.execute(sql)
-    result = cursor.fetchall()
-
-    # 使用Python代码来组合结果
-    for paperID, abstract in result:
-        _paperID2abstract[paperID] = abstract
-
-    cursor.close()
-    conn.close()
-    return _paperID2abstract
-
-if os.path.exists(f"out/{database}/paperID2abstract.json"):
-    with open(f"out/{database}/paperID2abstract.json") as f:
-        paperID2abstract = json.load(f)
-else:
-    paperID2abstract = defaultdict(str)
-    multiproces_num = 20
-    group_size = 1000
-    group_length = math.ceil(len(paperID_list)/group_size)
-    with multiprocessing.Pool(processes=multiproces_num * 3) as pool:
-        results = pool.map(extract_paper_abstract, [(paperID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
-        for result in results:
-            paperID2abstract.update(result)
-    print('finish extract_paper_abstract', len(paperID2abstract))
-    with open(f"out/{database}/paperID2abstract.json", 'w') as f:
-        json.dump(paperID2abstract, f)
+with open(f"out/{database}/paperID2abstract.json") as f:
+    paperID2abstract = json.load(f)
 
 db = pd.read_csv(f'out/{database}/csv/papers_field.csv')
 db['paperID'] = db['paperID'].astype(str)
