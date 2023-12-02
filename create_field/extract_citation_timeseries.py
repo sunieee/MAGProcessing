@@ -8,6 +8,7 @@ import math
 import numpy as np
 import concurrent.futures
 import json
+import os
 
 ''' 等价mysql命令，但是效率更高
 drop table papers_field_citation_timeseries_raw_raw;
@@ -29,10 +30,14 @@ delete from papers_field_citation_timeseries_raw where year <= 0
 ####################################################################################
 # create timeseries raw
 # 从论文引用和发布日期信息中创建了一个名为papers_field_citation_timeseries_raw的数据表，记录了每篇论文每年的引用次数，同时去除了无效的年份数据。
-####################################################################################
-paper_reference = pd.read_csv(f'out/{database}/paper_reference.csv', dtype={'citingpaperID': str, 'citedpaperID': str})
-paper_reference = paper_reference[['citedpaperID', 'citingpaperID']]
-paper_reference.columns = ['paperID', 'citingpaperID']
+if os.exists(f'out/{database}/paper_reference.csv'):
+    paper_reference = pd.read_csv(f'out/{database}/paper_reference.csv', dtype={'citingpaperID': str, 'citedpaperID': str})
+else:
+    paper_reference = pd.read_sql_query(f"select * from paper_reference_field", engine)
+    paper_reference['citingpaperID'] = paper_reference['citingpaperID'].astype(str)
+    paper_reference['citedpaperID'] = paper_reference['citedpaperID'].astype(str)
+    # paper_reference.to_csv(f'out/{database}/paper_reference.csv', index=False)
+
 
 paperID_list = paper_reference['paperID'].unique().tolist() + paper_reference['citingpaperID'].unique().tolist()
 paperID_list = list(set(paperID_list))

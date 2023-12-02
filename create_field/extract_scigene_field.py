@@ -42,12 +42,21 @@ paper_count_df = pd.DataFrame(columns=['type', 'ID', 'paperCount', 'accumulateCo
 def read_papers(fields, verbose=True):
     paper_ids = set()
     for fieldID in tqdm(fields):
-        cursor.execute(f"SELECT paperCount FROM MACG.field_of_study where fieldID='{fieldID}'")
-        result = cursor.fetchone()
+        try:
+            fieldID = int(fieldID)
+            cursor.execute(f"SELECT paperCount FROM MACG.field_of_study where fieldID='{fieldID}'")
+            result = cursor.fetchone()
+            paperCount = result[0]
+        except:
+            fieldName = fieldID
+            cursor.execute(f"SELECT fieldID, paperCount FROM MACG.field_of_study where name='{fieldName}'")
+            result = cursor.fetchone()
+            fieldID = result[0]
+            paperCount = result[1]
 
-        group_num = result[0] // GROUP_SIZE + 5
+        group_num = paperCount // GROUP_SIZE + 5
         pbar = tqdm(total=group_num)
-        print(f'filedID: {fieldID}, paperCount: {result[0]}, group_num: {group_num}')
+        print(f'filedID: {fieldID}, paperCount: {paperCount}, group_num: {group_num}')
         with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num) as executor:
             results = executor.map(get_paperID_batch, [(fieldID, i*GROUP_SIZE, i, pbar, verbose) for i in range(group_num)])
         

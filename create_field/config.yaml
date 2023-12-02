@@ -139,3 +139,18 @@ scigene_CG_field:
     - 1140059087
     - 2626018664
 
+
+scigene_AI_field:
+  fieldID:
+    - Information retrieval
+    - Speech recognition
+    - Computer vision
+    - Multimedia
+    - Knowledge management
+    - Machine learning
+    - Data mining
+    - World Wide web
+    - Artificial intelligence
+    - Pattern recognition
+    - Natural language processing
+    - Data science

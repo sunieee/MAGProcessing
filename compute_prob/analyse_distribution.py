@@ -25,25 +25,32 @@ def analyze_csv(filename, column_name):
     count = len(df[(df[column_name] > 0) & (df[column_name] < 1)])
     # 计算1的比例
     count1 = len(df[df[column_name] == 1])
+    count_greater_than_equal_0_5 = len(df[df[column_name] >= 0.5])
 
     # 计算均值和方差
     mean = df[column_name].mean()
     variance = df[column_name].var()
+    median = df[column_name].quantile(0.5)
 
-    print(f"0 ratio of {column_name}: {round(count0/len(df), 3)}")
-    print(f"Not 0/1 ratio of {column_name}: {round(count/len(df), 3)}")
-    print(f"1 ratio of {column_name}: {round(count1/len(df), 3)}")
-    print(f"Mean of {column_name}: {round(mean, 3)}")
-    print(f"Variance of {column_name}: {round(variance, 3)}")
+    des = f"""{column_name} ratio: 
+    0: {round(count0/len(df), 3)}
+    0~1: {round(count/len(df), 3)}
+    1: {round(count1/len(df), 3)}
+    >0.5: {round(count_greater_than_equal_0_5/len(df), 3)}
+Mean: {round(mean, 3)}
+Variance: {round(variance, 3)}
+50% Quantile: {round(median, 3)}"""
+    print(des)
 
     # 绘制分布图
     plt.figure(figsize=(10, 6))
     plt.hist(df[column_name], bins=50, edgecolor='k', alpha=0.7)
-    plt.title(f"Distribution of {column_name}")
+    plt.title(f"Distribution of {column_name} in {database}", fontsize=14)
     plt.xlabel(column_name)
     plt.ylabel('Frequency')
     plt.axvline(mean, color='r', linestyle='dashed', linewidth=1)
-    plt.text(mean*1.05, plt.ylim()[1]*0.9, 'Mean', rotation=0, color='r')
+    plt.text(mean*1.05, plt.ylim()[1]*0.9, 'Mean', rotation=0, color='r', fontsize=14)
+    plt.text(mean*1.05, plt.ylim()[1]*0.5, des, color='b', fontsize=14)  # 添加描述信息
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.tight_layout()
 

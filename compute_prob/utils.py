@@ -166,11 +166,12 @@ if not os.path.exists(f'out/{database}/edges.csv'):
                                     left_on='citedpaperID', right_on='paperID2')
     edges = merged_df2[merged_df2['authorID'] == merged_df2['authorID2']]
     edges = edges[['authorID', 'citingpaperID', 'citedpaperID']]
-
+    edges.drop_duplicates(inplace=True)
     print(f'edges created, time cost:', time.time()-t)
     edges.to_csv(f'out/{database}/edges.csv', index=False)    
 else:   
     edges = pd.read_csv(f'out/{database}/edges.csv')
+    edges.drop_duplicates(inplace=True)
     edges['authorID'] = edges['authorID'].astype(str)
     edges['citingpaperID'] = edges['citingpaperID'].astype(str)
     edges['citedpaperID'] = edges['citedpaperID'].astype(str)
