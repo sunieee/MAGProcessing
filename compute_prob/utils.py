@@ -11,7 +11,7 @@ import datetime
 import pandas as pd
 from collections import defaultdict
 
-database = os.environ.get('database', 'scigene_visualization_field')
+database = os.environ.get('database', 'scigene_visualization')
 multiproces_num = 20
 topN = os.environ.get('topN', 5000)
 topN = int(topN)
@@ -92,8 +92,8 @@ def executeFetch(sql, cursor=cursor):
 
 
 # authors_rows = executeFetch(f"""
-# select authorID, name, PaperCount_field 
-#     from {database}.authors_field
+# select authorID, name, PaperCount 
+#     from {database}.authors
 #     where {filterCondition} order by authorID;""")
 # authorID_list = [row[0] for row in authors_rows]
 
@@ -109,84 +109,45 @@ hIndex0 = cursor.fetchone()[0]
 print('MIN hIndex:', hIndex0)
 filterCondition = f'hIndex_{suffix} >= {hIndex0}'
 
-top_field_authors_path = f'out/{database}/top_field_authors.csv'
-if os.path.exists(top_field_authors_path):
-    print('top_field_authors.csv exists')
-    top_field_authors_df = pd.read_csv(top_field_authors_path)
+top_authors_path = f'out/{database}/top_authors.csv'
+if os.path.exists(top_authors_path):
+    print('top_authors.csv exists')
+    top_authors_df = pd.read_csv(top_authors_path)
 else:
-    print('top_field_authors.csv not exists')
-    top_field_authors_df = pd.read_sql(f"""select * from authors_{suffix}
+    print('top_authors.csv not exists')
+    top_authors_df = pd.read_sql(f"""select * from authors_{suffix}
         where {filterCondition}""", conn)
-    top_field_authors_df.to_csv(top_field_authors_path, index=False)
+    top_authors_df.to_csv(top_authors_path, index=False)
 
-top_field_authors_df['authorID'] = top_field_authors_df['authorID'].astype(str)
-authorID_list = top_field_authors_df['authorID'].tolist()
+top_authors_df['authorID'] = top_authors_df['authorID'].astype(str)
+authorID_list = top_authors_df['authorID'].tolist()
 
 
 print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S"))
 path_to_mapping = f"out/{database}/csv"
 if not os.path.exists(path_to_mapping):
     os.makedirs(path_to_mapping)
-    df_paper_author_field = pd.read_sql_query(f"select * from paper_author_{suffix}", conn)
-    df_paper_author_field.to_csv(f"{path_to_mapping}/paper_author_field.csv", index=False)
+    df_paper_author = pd.read_sql_query(f"select * from paper_author_{suffix}", conn)
+    df_paper_author.to_csv(f"{path_to_mapping}/paper_author.csv", index=False)
     
-    df_papers_field = pd.read_sql_query(f"select * from papers_{suffix}", conn)
-    df_papers_field.to_csv(f"{path_to_mapping}/papers_field.csv", index=False)
+    df_papers = pd.read_sql_query(f"select * from papers_{suffix}", conn)
+    df_papers.to_csv(f"{path_to_mapping}/papers.csv", index=False)
 
-    df_authors_field = pd.read_sql_query(f"select * from authors_{suffix}", conn)
-    df_authors_field.to_csv(f"{path_to_mapping}/authors_field.csv", index=False)
+    df_authors = pd.read_sql_query(f"select * from authors_{suffix}", conn)
+    df_authors.to_csv(f"{path_to_mapping}/authors.csv", index=False)
 
-    df_paper_reference_field = pd.read_sql_query(f"select * from paper_reference_{suffix}", conn)
-    df_paper_reference_field.to_csv(f"{path_to_mapping}/paper_reference_field.csv", index=False)
+    df_paper_reference = pd.read_sql_query(f"select * from paper_reference_{suffix}", conn)
+    df_paper_reference.to_csv(f"{path_to_mapping}/paper_reference.csv", index=False)
 else:
-    df_paper_author_field = pd.read_csv(f"{path_to_mapping}/paper_author_field.csv")
-    df_papers_field = pd.read_csv(f"{path_to_mapping}/papers_field.csv")
-    df_authors_field = pd.read_csv(f"{path_to_mapping}/authors_field.csv")
-    df_paper_reference_field = pd.read_csv(f"{path_to_mapping}/paper_reference_field.csv")
+    df_paper_author = pd.read_csv(f"{path_to_mapping}/paper_author.csv")
+    df_papers = pd.read_csv(f"{path_to_mapping}/papers.csv")
+    df_authors = pd.read_csv(f"{path_to_mapping}/authors.csv")
+    
+    df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
+    df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
+    df_papers['paperID'] = df_papers['paperID'].astype(str)
+    df_authors['authorID'] = df_authors['authorID'].astype(str)
+    
+df_paper_author_filtered = df_paper_author[df_paper_author['authorID'].isin(authorID_list)]
+df_paper_author_filtered = df_paper_author[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
 
-    df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
-    df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
-    df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
-    df_authors_field['authorID'] = df_authors_field['authorID'].astype(str)
-    df_paper_reference_field['citingpaperID'] = df_paper_reference_field['citingpaperID'].astype(str)
-    df_paper_reference_field['citedpaperID'] = df_paper_reference_field['citedpaperID'].astype(str)
-
-
-# 直接从paper_reference_field表中筛选出自引的记录
-print('creating node & edges', datetime.datetime.now().strftime("%H:%M:%S"))
-df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
-df_paper_author_field_filtered = df_paper_author_field_filtered[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
-
-if not os.path.exists(f'out/{database}/edges.csv'):
-    print('edges.csv not found, creating self-reference graph...')
-    t = time.time()
-    # 使用两次 merge 来模拟 SQL 中的 join 操作    
-    merged_df1 = df_paper_reference_field.merge(df_paper_author_field_filtered, left_on='citingpaperID', right_on='paperID')
-    merged_df2 = merged_df1.merge(df_paper_author_field_filtered.rename(columns={'authorID': 'authorID2', 'paperID': 'paperID2'}), 
-                                    left_on='citedpaperID', right_on='paperID2')
-    edges = merged_df2[merged_df2['authorID'] == merged_df2['authorID2']]
-    edges = edges[['authorID', 'citingpaperID', 'citedpaperID']]
-    edges.drop_duplicates(inplace=True)
-    print(f'edges created, time cost:', time.time()-t)
-    edges.to_csv(f'out/{database}/edges.csv', index=False)    
-else:   
-    edges = pd.read_csv(f'out/{database}/edges.csv')
-    edges.drop_duplicates(inplace=True)
-    edges['authorID'] = edges['authorID'].astype(str)
-    edges['citingpaperID'] = edges['citingpaperID'].astype(str)
-    edges['citedpaperID'] = edges['citedpaperID'].astype(str)
-
-edges_by_citing = edges.set_index('citingpaperID')
-edges_by_cited = edges.set_index('citedpaperID')
-
-nodes = pd.concat([edges['citingpaperID'], edges['citedpaperID']])
-nodes = tuple(nodes.drop_duplicates().values)
-print('#nodes:', len(nodes), '#edges:', len(edges))
-
-paperID_list = df_paper_author_field_filtered['paperID'].drop_duplicates().tolist()
-print('#paperID_list:', len(paperID_list))
-
-with open(f"out/{database}/nodes.txt", 'w') as f:
-    f.write('\n'.join(nodes))
-with open(f"out/{database}/paperID_list.txt", 'w') as f:
-    f.write('\n'.join(paperID_list))

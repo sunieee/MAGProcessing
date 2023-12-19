@@ -11,11 +11,29 @@ import pandas as pd
 from sqlalchemy import create_engine
 from tqdm import tqdm
 import math
-from scipy.stats import mannwhitneyu
-from scipy.stats import ttest_ind
 
 # import all needed variable from utils
-from utils import database, nodes, edges, edges_by_cited, edges_by_citing, df_papers_field, df_paper_author_field, engine, conn, cursor
+from utils import *
+
+edges = pd.read_csv(f'out/{database}/edges.csv')
+edges['authorID'] = edges['authorID'].astype(str)
+edges['citingpaperID'] = edges['citingpaperID'].astype(str)
+edges['citedpaperID'] = edges['citedpaperID'].astype(str)
+
+paperID2year = json.load(open(f'out/{database}/paperID2year.json'))
+edges_by_citing = edges.groupby('citingpaperID')['citedpaperID'].agg(list)
+edges_by_cited = edges.groupby('citedpaperID')['citingpaperID'].agg(list)
+
+nodes = pd.concat([edges['citingpaperID'], edges['citedpaperID']])
+nodes = tuple(nodes.drop_duplicates().values)
+print('#nodes:', len(nodes), '#edges:', len(edges))
+
+paperID_list = df_paper_author['paperID'].drop_duplicates().tolist()
+print('#paperID_list:', len(paperID_list))
+
+timeseries_df = pd.read_csv(f'out/{database}/timeseries.csv')
+timeseries_df['paperID'] = timeseries_df['paperID'].astype(str)
+timeseries_df.set_index('paperID', inplace=True)
 
 # the overlapping years should be at least MIN_YEAR_SPAN
 MIN_YEAR_SPAN = 5
@@ -107,8 +125,11 @@ def computeFeatures(citingRow, citedRow):
     if citing_total < MIN_TOTAL_CITATION or cited_total < MIN_TOTAL_CITATION:
         # print(f"warning: too small citation count! {citing_total}, {cited_total}")
         return {}
-    if citing_start < cited_start or citing_start <= 1900 or cited_start <= 1900:
-        print(f"warning: illegal overlapped citation time series! {citing_start}, {cited_start}")
+    if citing_start + 1 < cited_start or citing_start <= 1900 or cited_start <= 1900:
+        # 好多这种情况：后面发表的论文被前面的引用，或者引用在发表之前！！
+        # 因此放宽约束，只要 citing_start + 1 < cited_start 就可以了
+        print(f"warning: illegal overlapped citation time series: citing_start < cited_start!\n"
+              f"{citing_start}({citing}, {paperID2year[citing]}) < {cited_start}({cited}, {paperID2year[cited]})")
         return {}
     
     citingTruncated = computeTruncatedNum(citing_count_by_year)
@@ -155,17 +176,6 @@ def computeFeatures(citingRow, citedRow):
     return ret
 
 
-def get_feature_values(db, paperID):
-    data = db.loc[db['paperID'] == paperID]
-    if data.empty:
-        return None, None
-    year = int(data['year'].values[0])
-    citation_count = data['citationCount'].values[0]
-    if citation_count == -1:
-        citation_count = None
-    return year, citation_count
-
-
 def cos_sim(a, b):
     a_norm = np.linalg.norm(a)
     b_norm = np.linalg.norm(b)
@@ -187,26 +197,13 @@ def compute_metrics(citing_list, cited_list):
 
     return raw_metric, cosine_metric, jaccard_metric
 
-
-def get_values_from_index(df, index, column_name):
-    if index in df.index:
-        result = df.loc[index]
-        if isinstance(result, pd.DataFrame):
-            return result[column_name].tolist()
-        elif isinstance(result, pd.Series):
-            return [result[column_name]]
-    return []
-    
-
-# 6 correlation features
-timeseries_df = pd.read_sql_query(f"""select citeStartYear, citeEndYear, totalCitationCount, citationCountByYear, paperID 
-                                  from papers_field_citation_timeseries
-                                  where paperID in {nodes}""", engine)
-timeseries_df['paperID'] = timeseries_df['paperID'].astype(str)
-
 # 5 other features
-papers_df = df_papers_field[df_papers_field['paperID'].isin(nodes)]
-paper_author_df = df_paper_author_field[df_paper_author_field['paperID'].isin(nodes)]
+papers_df = df_papers[df_papers['paperID'].isin(nodes)]
+paper_author_df = df_paper_author[df_paper_author['paperID'].isin(nodes)]
+paperID2authors = paper_author_df.groupby('paperID')['authorID'].apply(set).to_dict()
+paperID2citationCount = papers_df.set_index('paperID')['citationCount'].to_dict()
+
+paper_author_df = None
 
 similarity_df = pd.read_csv(f'out/{database}/similarity_features.csv')
 similarity_df.pop('title')
@@ -225,79 +222,83 @@ df_feature = pd.DataFrame(columns=feature_names)
 # df_feature.index.names = ["citingpaperID", "citedpaperID"]
 
 
-def extract_feature_by_index(i):
-    print(f'extracting feature {i}/{len(edges)}')
-    row = edges.iloc[i]
-    authorID = row['authorID']
-    citing = row['citingpaperID']
-    cited = row['citedpaperID']
+def get_row(paper_id):
+    try:
+        # 尝试获取行，如果 paper_id 存在于索引中
+        row = timeseries_df.loc[paper_id]
+        return row.values.tolist()
+    except KeyError:
+        # 如果 paper_id 不存在，则返回空列表
+        return []
     
-    citingRow = timeseries_df.loc[timeseries_df['paperID'] == citing].values.tolist()
-    citedRow = timeseries_df.loc[timeseries_df['paperID'] == cited].values.tolist()
 
-    if len(citingRow)==0 or len(citedRow)==0:
-        feature = {}
-    else:
-        feature = computeFeatures(citingRow[0], citedRow[0])
-    
-    
-    year_citing, num_citing = get_feature_values(papers_df, citing)
-    year_cited, num_cited = get_feature_values(papers_df, cited)
-    
-    year_diff = year_citing - year_cited if year_citing and year_cited and year_citing >= year_cited else None
-    
-    citing_authors = set(paper_author_df.loc[paper_author_df['paperID'] == citing]['authorID'].values.tolist())
-    cited_authors = set(paper_author_df.loc[paper_author_df['paperID'] == cited]['authorID'].values.tolist())
-    self_cite_count = len(citing_authors.intersection(cited_authors))
-    
-    other_feature = {
-        'year_diff': year_diff,
-        'citing_paper_citationcount': num_citing,
-        'cited_paper_citationcount': num_cited,
-        'self_cite': self_cite_count if citing_authors and cited_authors else None,
-        'similarity': cos_sim(similarity_df.loc[citing], similarity_df.loc[cited])
-    }
+def extract_feature(ixs):
+    ret = {}
+    for i in tqdm(ixs):
+        row = edges.iloc[i]
+        authorID = row['authorID']
+        citing = row['citingpaperID']
+        cited = row['citedpaperID']
+        
+        
+        # 获取 citing 和 cited 的行
+        citingRow = get_row(citing)
+        citedRow = get_row(cited)
+        feature = {} if not citingRow or not citedRow else computeFeatures(citingRow, citedRow, citing, cited)
+        
+        year_citing = paperID2year[citing]
+        year_cited = paperID2year[cited]
+        year_diff = year_citing - year_cited if year_citing and year_cited and year_citing >= year_cited else None
+        
+        citing_authors = paperID2authors.get(citing, set())
+        cited_authors = paperID2authors.get(cited, set())
+        other_feature = {
+            'year_diff': year_diff,
+            'citing_paper_citationcount': paperID2citationCount.get(citing),
+            'cited_paper_citationcount': paperID2citationCount.get(cited),
+            'self_cite': len(citing_authors.intersection(cited_authors)) if citing_authors and cited_authors else None,
+            'similarity': cos_sim(similarity_df.loc[citing], similarity_df.loc[cited])
+        }
+        
+        # 使用索引查询co-citation数据
+        raw_cocitation, cosine_cocitation, jaccard_cocitation = compute_metrics(edges_by_cited.get(cited,[]), edges_by_cited.get(citing,[]))
+        raw_bibcoupling, cosine_bibcoupling, jaccard_bibcoupling = compute_metrics(edges_by_citing.get(citing, []), edges_by_citing.get(cited, []))
 
-    # 使用索引查询co-citation数据
-    citingCitations = get_values_from_index(edges_by_cited, cited, 'citingpaperID')
-    citedCitations = get_values_from_index(edges_by_cited, citing, 'citingpaperID')
+        network_features = {
+            'raw_cocitation': raw_cocitation,
+            'cosine_cocitation': cosine_cocitation,
+            'jaccard_cocitation': jaccard_cocitation,
+            'raw_bibcoupling': raw_bibcoupling,
+            'cosine_bibcoupling': cosine_bibcoupling,
+            'jaccard_bibcoupling': jaccard_bibcoupling
+        }
 
-    raw_cocitation, cosine_cocitation, jaccard_cocitation = compute_metrics(citingCitations, citedCitations)
+        dic = {
+            **feature,
+            **other_feature,
+            **network_features
+        }
+        for feature in feature_names:
+            if feature not in dic or dic[feature] is None:
+                dic[feature] = np.nan
 
-    # 使用索引查询bibliometric coupling数据
-    citingReferences = get_values_from_index(edges_by_citing, citing, 'citedpaperID')
-    citedReferences = get_values_from_index(edges_by_citing, cited, 'citedpaperID')
+        # df_feature.loc[citing + ' ' + cited + ' ' + authorID] = dic
+        ret[citing + ' ' + cited + ' ' + authorID] = dic
+    return ret
 
-    raw_bibcoupling, cosine_bibcoupling, jaccard_bibcoupling = compute_metrics(citingReferences, citedReferences)
+multiprocess_num = multiprocessing.cpu_count()
+with multiprocessing.Pool(processes=multiprocess_num) as pool:
+    results = pool.map(extract_feature, np.array_split(edges.index.values, multiprocess_num * 2))
 
-    network_features = {
-        'raw_cocitation': raw_cocitation,
-        'cosine_cocitation': cosine_cocitation,
-        'jaccard_cocitation': jaccard_cocitation,
-        'raw_bibcoupling': raw_bibcoupling,
-        'cosine_bibcoupling': cosine_bibcoupling,
-        'jaccard_bibcoupling': jaccard_bibcoupling
-    }
+results_dic = {}
+for result in tqdm(results):
+    results_dic.update(result)
 
-    dic = {
-        **feature,
-        **other_feature,
-        **network_features
-    }
-    for feature in feature_names:
-        if feature not in dic or dic[feature] is None:
-            dic[feature] = np.nan
+# save the results
+with open(f'out/feature_results.json', 'w') as f:
+    json.dump(results_dic, f)
 
-    # df_feature.loc[citing + ' ' + cited + ' ' + authorID] = dic
-    return citing + ' ' + cited + ' ' + authorID, dic
-
-
-import multiprocessing
-
-with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-    results = pool.map(extract_feature_by_index, range(len(edges)))
-
-results_dic = dict(results)
+# results_dic = dict(results)
 # add all the dictionary to the dataframe df_feature
 df_feature = pd.DataFrame.from_dict(results_dic, orient='index', columns=feature_names)
 

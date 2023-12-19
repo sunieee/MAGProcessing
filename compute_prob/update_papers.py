@@ -9,6 +9,7 @@ from collections import defaultdict
 import math
 import datetime
 import json
+import re
 
 
 database = os.environ.get('database', 'scigene_visualization_field')
@@ -25,22 +26,22 @@ def create_connection(database):
 paper_dir = f'out/{database}/papers_raw'
 file_list = os.listdir(paper_dir)
 
-df_papers_field = pd.read_csv(f'out/{database}/csv/papers_field.csv')
-df_papers_field['paperID'] = df_papers_field['paperID'].astype(str)
-if 'referenceCount' not in df_papers_field.columns:
-    df_papers_field['referenceCount'] = -1
-top_field_authors = pd.read_csv(f'out/{database}/top_field_authors.csv')
-top_field_authors['authorID'] = top_field_authors['authorID'].astype(str)
+df_papers = pd.read_csv(f'out/{database}/csv/papers.csv')
+df_papers['paperID'] = df_papers['paperID'].astype(str)
+if 'referenceCount' not in df_papers.columns:
+    df_papers['referenceCount'] = -1
+top_authors = pd.read_csv(f'out/{database}/top_authors.csv')
+top_authors['authorID'] = top_authors['authorID'].astype(str)
 
-authorID_list = top_field_authors['authorID'].tolist()
-df_paper_author_field = pd.read_csv(f"out/{database}/csv/paper_author_field.csv")
-df_paper_author_field['authorID'] = df_paper_author_field['authorID'].astype(str)
-df_paper_author_field['paperID'] = df_paper_author_field['paperID'].astype(str)
+authorID_list = top_authors['authorID'].tolist()
+df_paper_author = pd.read_csv(f"out/{database}/csv/paper_author.csv")
+df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
+df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
 
-df_paper_author_field_filtered = df_paper_author_field[df_paper_author_field['authorID'].isin(authorID_list)]
-paperID_list = df_paper_author_field_filtered['paperID'].drop_duplicates().tolist()
-paperID2referenceCount = dict(zip(df_papers_field['paperID'], df_papers_field['referenceCount']))
-paperID2citationCount = dict(zip(df_papers_field['paperID'], df_papers_field['citationCount']))
+df_paper_author_filtered = df_paper_author[df_paper_author['authorID'].isin(authorID_list)]
+paperID_list = df_paper_author_filtered['paperID'].drop_duplicates().tolist()
+paperID2referenceCount = dict(zip(df_papers['paperID'], df_papers['referenceCount']))
+paperID2citationCount = dict(zip(df_papers['paperID'], df_papers['citationCount']))
 
 
 def extract_paper_abstract(pairs):
@@ -65,7 +66,7 @@ def extract_paper_abstract(pairs):
 
     # 使用Python代码来组合结果
     for paperID, abstract in result:
-        _paperID2abstract[paperID] = abstract
+        _paperID2abstract[paperID] = re.sub('\s+', ' ', abstract)
 
     cursor.close()
     conn.close()
@@ -189,20 +190,21 @@ def extract_paper(file):
     core_citations.sort(reverse=True)
     return {
         'authorID': file.split('.')[0],
-        'CorePaperCount_field': len(core_papers),
-        'CoreCitationCount_field': core_papers['citationCount'].sum(),
-        'CorehIndex_field': sum(1 for i, citation in enumerate(core_citations) if citation > i)
+        'CorePaperCount': len(core_papers),
+        'CoreCitationCount': core_papers['citationCount'].sum(),
+        'CorehIndex': sum(1 for i, citation in enumerate(core_citations) if citation > i)
     }
 
+os.makedirs(f'out/{database}/papers', exist_ok=True)
 multiproces_num = 20
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper, file_list)
 
 df = pd.DataFrame(results)
-# remove columns in top_field_authors if exist: ['CorePaperCount_field', 'CoreCitationCount_field', 'CorehIndex_field']
-for col in ['CorePaperCount_field', 'CoreCitationCount_field', 'CorehIndex_field']:
-    if col in top_field_authors.columns:
-        top_field_authors = top_field_authors.drop(columns=[col])
-top_field_authors = top_field_authors.merge(df, on='authorID')
+# remove columns in top_authors if exist: ['CorePaperCount', 'CoreCitationCount', 'CorehIndex']
+for col in ['CorePaperCount', 'CoreCitationCount', 'CorehIndex']:
+    if col in top_authors.columns:
+        top_authors = top_authors.drop(columns=[col])
+top_authors = top_authors.merge(df, on='authorID')
 
-top_field_authors.to_csv(f'out/{database}/top_field_authors.csv', index=False)
+top_authors.to_csv(f'out/{database}/top_field_authors.csv', index=False)

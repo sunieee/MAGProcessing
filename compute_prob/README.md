@@ -20,3 +20,6 @@ The default topN is set to 5000, indicating that the process will focus on the t
    - **update_links.py** - fetch_citation_context
 3. **analyse_distribution.py**
    - Analyzes the distribution of generated probabilities for papers and citations, and creates corresponding visualizations.
+
+
+注意：`paperID2abstract.json` 要删掉，visualization领域因为没有删除而使用了旧的abstract，造成学习topic文章数更少

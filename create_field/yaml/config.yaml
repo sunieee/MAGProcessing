@@ -141,7 +141,35 @@ scigene_CG_field:
 
 
 scigene_AI_field:
-  fieldID:
+  field:
+    - Information retrieval
+    - Speech recognition
+    - Computer vision
+    - Multimedia
+    - Knowledge management
+    - Machine learning
+    - Data mining
+    - World Wide web
+    - Artificial intelligence
+    - Pattern recognition
+    - Natural language processing
+    - Data science
+
+scigene_AIChild_field:
+  field:
+    - Information retrieval
+    - Speech recognition
+    - Computer vision
+    - Multimedia
+    - Knowledge management
+    - Machine learning
+    - Data mining
+    - World Wide web
+    - Artificial intelligence
+    - Pattern recognition
+    - Natural language processing
+    - Data science
+  children:
     - Information retrieval
     - Speech recognition
     - Computer vision

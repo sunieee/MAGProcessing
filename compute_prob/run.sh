@@ -14,13 +14,14 @@ run() {
     database=$1
     export database=$database
     # rm -rf out/$database/{papers_raw,papers,links,log}
-    # mkdir -p out/$database/{papers_raw,papers,links,log}
-
+    mkdir -p out/$database/{papers_raw,papers,links,log}
+    
     # # compute node
     python compute_key_papers.py > out/$database/log/compute_key_papers.log
     python update_papers.py > out/$database/log/update_papers.log
 
     # # compute edge
+    python graph.py > out/$database/log/graph.log
     python compute_similarity_features.py > out/$database/log/compute_similarity_features.log
     python run_extract_features.py > out/$database/log/run_extract_features.log
     python compute_link_prob.py > out/$database/log/compute_proba.log
@@ -31,11 +32,12 @@ run() {
 }
 
 
-run scigene_VCG_field
-run scigene_visualization_field
-run scigene_database_field
-run scigene_CG_field
-run scigene_acl_anthology
+# run scigene_VCG_field
+# run scigene_visualization_field
+# run scigene_database_field
+# run scigene_CG_field
+# run scigene_acl_anthology
+run scigene_AI_field
 
 
 

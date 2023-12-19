@@ -27,7 +27,6 @@ WHERE authorID = '{id2}';
 """)
 
     execute(f"DELETE FROM {database}.authors_field WHERE authorID = '{id2}';")
-
     authorIDs.add(id1)
 
 authorIDs_str = ', '.join([f"'{x}'" for x in authorIDs])
@@ -79,10 +78,7 @@ for authorID in tqdm(authorIDs):
     citations.sort(reverse=True)
     hIndex_field = sum(1 for i, citation in enumerate(citations) if citation > i)
 
-    cursor.execute(
-        "update authors_field set hIndex_field = %s where authorID = %s",
-        (hIndex_field, authorID)
-    )
+    cursor.execute(f"update authors_field set hIndex_field = {hIndex_field} where authorID = '{authorID}'")
     conn.commit()
     # print("Process author: ", authorName, " with rank ", str(authorRank))
 

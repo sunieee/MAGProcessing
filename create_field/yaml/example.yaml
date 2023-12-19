@@ -1,0 +1,148 @@
+scigene_vis_field:
+  field:
+  - Music visualization
+  - Visualization
+  - Software visualization
+  - Flow visualization
+scigene_visualization_field:
+  field:
+  - Music visualization
+  - Visualization
+  - Software visualization
+  - Flow visualization
+  - Visual analytics
+  children:
+  - Visualization
+  journal:
+  - Journal of Visualization
+  - IEEE Transactions on Visualization and Computer Graphics
+  - Visual Informatics
+  - Computer Graphics Forum
+  - Information Visualization
+  conference:
+  - IEEE Pacific Visualization Symposium
+  - IEEE VGTC Conference on Visualization
+  - IEEE International Conference on Information Visualization
+  - Visual Analytics Science and Technology
+  - International Conference on Information Visualization Theory and Applications
+  - IEEE Visualization
+  - Software Visualization
+  - IEEE Symposium on Large Data Analysis and Visualization
+  - Visualization for Computer Security
+  - Visual Information Communication and Interaction
+  - Visualization and Data Analysis
+  - Graph Drawing
+  - Big Data Visual and Immersive Analytics
+  - IEEE Symposium on Information Visualization
+  - Symposium on Volume Visualization
+scigene_database_field:
+  field:
+  - Database
+  - Data science
+  journal:
+  - ACM Transactions on Database Systems
+  - IEEE Transactions on Knowledge and Data Engineering
+  - The Vldb Journal
+  - Advanced Engineering Informatics
+  - Data and Knowledge Engineering
+  - Information Processing and Management
+  - Information Sciences
+  - Information Systems
+  conference:
+  - Data and Knowledge Engineering
+  - International Conference on Management of Data
+  - International Conference on Data Engineering
+  - Very Large Data Bases
+  - Conference on Information and Knowledge Management
+  - Web Search and Data Mining
+  - Database Systems for Advanced Applications
+  - International Conference on Database Theory
+  - Conference on Innovative Data Systems Research
+  - Database and Expert Systems Applications
+  - International Conference on Conceptual Modeling
+  - Mobile Data Management
+  - Statistical and Scientific Database Management
+scigene_VCG_field:
+  field:
+  - Music visualization
+  - Visualization
+  - Software visualization
+  - Flow visualization
+  - Visual analytics
+  - Computer graphics (images)
+  children:
+  - Visualization
+  journal:
+  - Journal of Visualization
+  - IEEE Transactions on Visualization and Computer Graphics
+  - Visual Informatics
+  - Computer Graphics Forum
+  - Information Visualization
+  - ACM Transactions on Graphics
+  - Computer Aided Geometric Design
+  - Computer Graphics Forum
+  - Computer-aided Design
+  - Graphical Models and Image Processing
+  - 'CVGIP: Graphical Models and Image Processing'
+  conference:
+  - IEEE Pacific Visualization Symposium
+  - IEEE VGTC Conference on Visualization
+  - IEEE International Conference on Information Visualization
+  - Visual Analytics Science and Technology
+  - International Conference on Information Visualization Theory and Applications
+  - IEEE Visualization
+  - Software Visualization
+  - IEEE Symposium on Large Data Analysis and Visualization
+  - Visualization for Computer Security
+  - Visual Information Communication and Interaction
+  - Visualization and Data Analysis
+  - Graph Drawing
+  - Big Data Visual and Immersive Analytics
+  - IEEE Symposium on Information Visualization
+  - Symposium on Volume Visualization
+  - International Conference on Computer Graphics and Interactive Techniques
+  - Interactive 3D Graphics and Games
+  - Symposium on Computer Animation
+  - Eurographics
+  - Symposium on Geometry Processing
+  - Eurographics Symposium on Rendering Techniques
+  - Pacific Conference on Computer Graphics and Applications
+  - Solid and Physical Modeling
+scigene_physics_field:
+  field:
+  - Physics
+scigene_CG_field:
+  field:
+  - Computer graphics (images)
+  journal:
+  - IEEE Transactions on Visualization and Computer Graphics
+  - Computer Graphics Forum
+  - ACM Transactions on Graphics
+  - Computer Aided Geometric Design
+  - Computer Graphics Forum
+  - Computer-aided Design
+  - Graphical Models and Image Processing
+  - 'CVGIP: Graphical Models and Image Processing'
+  conference:
+  - International Conference on Computer Graphics and Interactive Techniques
+  - Interactive 3D Graphics and Games
+  - Symposium on Computer Animation
+  - Eurographics
+  - Symposium on Geometry Processing
+  - Eurographics Symposium on Rendering Techniques
+  - Pacific Conference on Computer Graphics and Applications
+  - Solid and Physical Modeling
+scigene_AI_field:
+  field:
+  - Information retrieval
+  - Speech recognition
+  - Computer vision
+  - Multimedia
+  - Knowledge management
+  - Machine learning
+  - Data mining
+  - World Wide web
+  - Artificial intelligence
+  - Pattern recognition
+  - Natural language processing
+  - Data science

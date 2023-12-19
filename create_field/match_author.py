@@ -186,6 +186,7 @@ def test():
 cursor.execute('select hIndex_field from authors_field order by hIndex_field desc limit 1 offset 3000')
 hIndex0 = cursor.fetchone()[0]
 print('MIN hIndex:', hIndex0)
+assert hIndex0 > 0
 df = pd.read_sql_query(f'select * from authors_field where hIndex_field >= {hIndex0}', engine)
 
 print(df.shape)

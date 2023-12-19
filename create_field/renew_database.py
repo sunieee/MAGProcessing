@@ -1,103 +1,86 @@
-from utils import database, execute, try_execute, create_connection, cursor, conn
-import pandas as pd
-import math
-import multiprocessing
+from utils import database, cursor, conn
+import os
 from tqdm import tqdm
-
-####################################################################################
-# update papers_field
-# 将论文表中的年份更新为发布日期的年份，为年份添加索引，然后从papers_field_citation_timeseries表复制引用次数序列数据到新的列中。
-####################################################################################
-print('updating papers_field')
-try_execute("ALTER TABLE papers_field DROP COLUMN citationCountByYear;")
-
-cursor.execute("SHOW COLUMNS FROM papers_field LIKE 'year'")
-if cursor.fetchone() is None:
-    cursor.execute("ALTER TABLE papers_field ADD year INT")
-    conn.commit()
-
-execute('''
-update papers_field set year = year(PublicationDate);
-alter table papers_field add index(year);
-
-ALTER TABLE papers_field ADD citationCountByYear varchar(999);
-update papers_field as PA, papers_field_citation_timeseries as PM set PA.citationCountByYear = PM.citationCountByYear where PA.paperID = PM.paperID;
-''')
+import pandas as pd
+from datetime import datetime
+import json
 
 
-#######################################################################
-# update authors_field
-# 计算并添加作者在领域内的论文及引用数量，更新作者的引用总数信息
-# 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
-#######################################################################
-print('updating authors_field')
+if not os.path.exists(f'out/{database}/papers.csv'):
+    df_papers = pd.read_sql_query(f"""select * from papers_field""", conn)
+    df_papers.to_csv(f'out/{database}/papers.csv', index=False)
+else:
+    df_papers = pd.read_csv(f'out/{database}/papers.csv')
+    df_papers['paperID'] = df_papers['paperID'].astype(str)
 
-try_execute("ALTER TABLE authors_field DROP COLUMN PaperCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN CitationCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN hIndex_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN FellowType;")
+if not os.path.exists(f'out/{database}/paper_reference.csv'):
+    df_paper_reference = pd.read_sql_query(f"""select * from paper_reference_field""", conn)
+    df_paper_reference.to_csv(f'out/{database}/paper_reference.csv', index=False)
+else:
+    df_paper_reference = pd.read_csv(f'out/{database}/paper_reference.csv')
+    df_paper_reference['citingpaperID'] = df_paper_reference['citingpaperID'].astype(str)
+    df_paper_reference['citedpaperID'] = df_paper_reference['citedpaperID'].astype(str)
 
-execute('''
-ALTER TABLE authors_field ADD PaperCount_field INT DEFAULT 0;
-UPDATE authors_field af
-JOIN (
-    SELECT authorID, COUNT(*) as count_papers
-    FROM paper_author_field
-    GROUP BY authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.PaperCount_field = tmp.count_papers;
+if not os.path.exists(f'out/{database}/paper_author.csv'):
+    df_paper_author = pd.read_sql_query(f"""select * from paper_author_field""", conn)
+    df_paper_author.to_csv(f'out/{database}/paper_author.csv', index=False)
+else:
+    df_paper_author = pd.read_csv(f'out/{database}/paper_author.csv')
+    df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
+    df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
 
-ALTER TABLE authors_field ADD CitationCount_field INT DEFAULT 0;
-UPDATE authors_field af
-JOIN (
-    SELECT PA.authorID, SUM(P.citationCount) as total_citations
-    FROM papers_field as P 
-    JOIN paper_author_field as PA on P.paperID = PA.paperID 
-    WHERE P.CitationCount >= 0 
-    GROUP BY PA.authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.CitationCount_field = tmp.total_citations;
+if not os.path.exists(f'out/{database}/authors.csv'):
+    df_authors = pd.read_sql_query(f"""select * from authors_field""", conn)
+    df_authors.to_csv(f'out/{database}/authors.csv', index=False)
+else:
+    df_authors = pd.read_csv(f'out/{database}/authors.csv')
+    df_authors['authorID'] = df_authors['authorID'].astype(str)
 
-ALTER TABLE authors_field ADD hIndex_field INT DEFAULT 0;
-''')
+print('load data finished', datetime.now().strftime("%H:%M:%S"))
+cnt = 1000000
+min_size = 2
+while cnt > 200000:
+    min_size += 1
+    filtered_authors = df_authors[df_authors['PaperCount_field'] >= min_size]
+    cnt = len(filtered_authors)
 
-# 过滤掉不重要的人（剩下约1/8的人），节省计算时间
-# 1532927 -> 273005(1) -> 120834(2) -> 71839(3)
-authorID_list = pd.read_sql(f"SELECT authorID FROM authors_field where PaperCount_field>2", conn)['authorID'].tolist()
+print('min_size:', min_size, 'cnt:', cnt)
+authorID_list = filtered_authors['authorID'].tolist()
 
-def extract_hIndex(pair):
-    authorID_list, order = pair
-    print(f'* extracting hIndex: {order}')
-    conn, cursor = create_connection(database)
-    for authorID in tqdm(authorID_list):
-        cursor.execute(f"""select P.CitationCount from papers_field as P 
-                    join paper_author_field as PA 
-                    on PA.authorID = '{authorID}' and P.paperID = PA.paperID;""")
-        rows = cursor.fetchall()
-        citations = [int(citation_row[0]) for citation_row in rows]
-        citations.sort(reverse=True)
-        hIndex_field = sum(1 for i, citation in enumerate(citations) if citation > i)
+df_paper_author = df_paper_author[df_paper_author['authorID'].isin(authorID_list)]
+print('df_paper_author:', len(df_paper_author), datetime.now().strftime("%H:%M:%S"))
 
-        cursor.execute(
-            "update authors_field set hIndex_field = %s where authorID = %s",
-            (hIndex_field, authorID)
-        )
-        conn.commit()
-    cursor.close()
-    conn.close()
+if os.path.exists(f'out/{database}/paperID2citationCount.json'):
+    with open(f'out/{database}/paperID2citationCount.json', 'r') as f:
+        paperID2citationCount = json.load(f)
+else:
+    df_papers = df_papers[df_papers['paperID'].isin(df_paper_author['paperID'])]
+    print('df_papers:', len(df_papers), datetime.now().strftime("%H:%M:%S"))
 
+    paperID2citationCount = pd.Series(df_papers.citationCount.values, index=df_papers.paperID).to_dict()
+    print('paperID2citationCount:', len(paperID2citationCount), datetime.now().strftime("%H:%M:%S"))
+    # save paperID2citationCount
+    with open(f'out/{database}/paperID2citationCount.json', 'w') as f:
+        json.dump(paperID2citationCount, f)
 
-multiproces_num = 20
-group_size = 2000
-group_length = math.ceil(len(authorID_list)/group_size)
-with multiprocessing.Pool(processes=multiproces_num * 5) as pool:
-    results = pool.map(extract_hIndex, [(authorID_list[i*group_size:(i+1)*group_size], f'{i}/{group_length}') for i in range(group_length)])
+# 对 df_paper_author 按照 authorID 进行分组，并将 paperID 聚合为列表
+def calculate_h_index(paperIDs, paperID2citationCount):
+    citations = [paperID2citationCount.get(paperID, 0) for paperID in paperIDs]
+    citations.sort(reverse=True)
+    h_index = sum(1 for i, citation in enumerate(citations) if citation > i)
+    return h_index
 
+author_h_index = df_paper_author.groupby('authorID')['paperID'].apply(lambda paperIDs: calculate_h_index(paperIDs, paperID2citationCount))
+print('author_h_index:', len(author_h_index), datetime.now().strftime("%H:%M:%S"))
 
-# ALTER TABLE authors_field ADD FellowType varchar(999);
-# update authors_field as af, scigene_acl_anthology.fellow as f 
-#     set af.FellowType='1' where af.name = f.name and af.authorRank<=1000 and f.type=1 and CitationCount_field>=1000
+authorID2h_index = author_h_index.to_dict()
+# save authorID2h_index
+with open(f'out/{database}/authorID2h_index.json', 'w') as f:
+    json.dump(authorID2h_index, f)
 
+update_query = "UPDATE authors_field SET hIndex_field = %s WHERE authorID = '%s'"
+# cursor.executemany(update_query, h_index_updates)
+# conn.commit()
 
-cursor.close()
-conn.close()
+for authorID, h_index in tqdm(authorID2h_index.items()):
+    cursor.execute(update_query, (h_index, authorID))

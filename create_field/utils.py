@@ -6,13 +6,19 @@ import numpy as np
 
 import sys
 import os
-
-
-database = os.environ.get('database', 'scigene_database_field')
-# read config.yaml
 import yaml
-with open('config.yaml') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
+
+
+field = os.environ.get('field')
+database = f'scigene_{field}_field'
+
+
+if os.path.exists(f'yaml/{field}.yaml'):
+    with open(f'yaml/{field}.yaml') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+else:
+    with open('config.yaml') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
 field_info = config[database]
 
 

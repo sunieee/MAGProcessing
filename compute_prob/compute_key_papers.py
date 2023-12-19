@@ -6,11 +6,12 @@ from tqdm import tqdm
 import multiprocessing
 
 # import all needed variable from utils
-from utils import df_authors_field, df_paper_author_field, df_papers_field, df_paper_author_field_filtered, authorID_list, path_to_mapping, database, conn, cursor, multiproces_num
+from utils import df_authors, df_paper_author, df_papers, df_paper_author_filtered, authorID_list, path_to_mapping, database, conn, cursor, multiproces_num
+
 
 MIN_STUDENT_AUTHOR_ORDER = 3
 print("Pre-compute first author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
-firstAuthorTmp = df_paper_author_field_filtered.merge(df_paper_author_field, on="paperID", suffixes=('', '_first')) \
+firstAuthorTmp = df_paper_author_filtered.merge(df_paper_author, on="paperID", suffixes=('', '_first')) \
     .query("authorOrder > 1 and authorOrder_first == 1") 
 firstAuthorTmp = firstAuthorTmp[['authorID', 'paperID', 'authorOrder', 'authorID_first']]
 firstAuthorTmp = firstAuthorTmp.groupby(['authorID', 'authorID_first']).size().reset_index(name='count')
@@ -41,7 +42,7 @@ firstAuthors = firstAuthorTmp['authorID_first'].unique().tolist()
 ######################################################################
 print("compute first-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
 # Perform the necessary merges and group by operations
-merged_df = df_paper_author_field.merge(df_papers_field, on='paperID')
+merged_df = df_paper_author.merge(df_papers, on='paperID')
 filtered_df = merged_df[merged_df['authorID'].isin(firstAuthors + authorID_list)]
 grouped = filtered_df.groupby(['authorID', 'authorOrder', 'year']).size().reset_index(name='cnt')
 paperCountMap = {}
@@ -69,10 +70,10 @@ for _, row in grouped.iterrows():
 ######################################################################
 print("compute co-author maps!", datetime.datetime.now().strftime("%H:%M:%S"))
 coauthor_joined = firstAuthorTmp.merge(
-    df_paper_author_field[df_paper_author_field['authorOrder'] <= MIN_STUDENT_AUTHOR_ORDER], 
+    df_paper_author[df_paper_author['authorOrder'] <= MIN_STUDENT_AUTHOR_ORDER], 
     left_on='authorID_first', right_on='authorID', suffixes=('', '_PA1')
 ).merge(
-    df_paper_author_field, left_on=['authorID', 'paperID'], right_on=['authorID', 'paperID'], suffixes=('', '_PA2')
+    df_paper_author, left_on=['authorID', 'paperID'], right_on=['authorID', 'paperID'], suffixes=('', '_PA2')
 )
 coauthor_joined = coauthor_joined[coauthor_joined['authorOrder'] < coauthor_joined['authorOrder_PA2']]
 '''
@@ -93,7 +94,7 @@ PA1 是第一作者，PA2 是合作者，查询两者之间有没有其他的联
 
 [209923 rows x 7 columns]
 '''
-coauthor_year_joined = coauthor_joined.merge(df_papers_field[['paperID', 'year']], left_on="paperID", right_on="paperID", suffixes=('', '_P'))
+coauthor_year_joined = coauthor_joined.merge(df_papers[['paperID', 'year']], left_on="paperID", right_on="paperID", suffixes=('', '_P'))
 coauthor_year_joined = coauthor_year_joined[['authorID_first', 'authorID', 'paperID', 'authorOrder', 'year']].drop_duplicates()
 grouped = coauthor_year_joined.groupby(['authorID_first', 'authorID', 'authorOrder', 'year']).size().reset_index(name='count')
 grouped['coAuthorID'] = grouped['authorID_first'] + "-" + grouped['authorID']
@@ -194,7 +195,7 @@ def compute_total_count(paper_count_map, year):
 
 def compute_supervisor_rate(studentID, supervisorID, year):
     # if not studentID:
-    #     cursorField.execute("select authorOrder from paper_author_field where paperID='%s' and authorID='%s'" % (paperID, supervisorID))
+    #     cursorField.execute("select authorOrder from paper_author where paperID='%s' and authorID='%s'" % (paperID, supervisorID))
     #     return 1 / float(cursorField.fetchone()[0])
     # the sorted list of years that the student has paper publication, truncated to {0,1,..., MAX_ACADEMIC_YEAR}
     if studentID not in paperCountMap:
@@ -276,8 +277,8 @@ def compute_supervisor_rate(studentID, supervisorID, year):
 
 
 print("create util mapping", datetime.datetime.now().strftime("%H:%M:%S"))
-authorID2name = df_authors_field.set_index('authorID')['name'].to_dict()
-paperID2FirstAuthorID = df_paper_author_field[df_paper_author_field['authorOrder'] == 1].set_index('paperID')['authorID'].to_dict()
+authorID2name = df_authors.set_index('authorID')['name'].to_dict()
+paperID2FirstAuthorID = df_paper_author[df_paper_author['authorOrder'] == 1].set_index('paperID')['authorID'].to_dict()
 
 ######################################################################
 # 从数据库中查询某个领域的前几名作者。
@@ -302,11 +303,11 @@ def build_top_author(pairs):
     for authorID in tqdm(authorID_list):
         print('## ' + authorID)
 
-        # Filter out rows from df_paper_author_field for the specific authorID
-        df_paper_author_field_author = df_paper_author_field[df_paper_author_field['authorID'] == authorID]
+        # Filter out rows from df_paper_author for the specific authorID
+        df_paper_author_author = df_paper_author[df_paper_author['authorID'] == authorID]
 
         # Perform the same operations you did with SQL directly with pandas
-        df = df_papers_field.merge(df_paper_author_field_author, on="paperID").groupby(['paperID', 'title', 'year']).agg({
+        df = df_papers.merge(df_paper_author_author, on="paperID").groupby(['paperID', 'title', 'year']).agg({
             'authorOrder': 'min'
         }).reset_index()
         df['isKeyPaper'] = 0.0
