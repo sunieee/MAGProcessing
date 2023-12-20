@@ -12,7 +12,7 @@ import pandas as pd
 import gensim
 from gensim.parsing.preprocessing import preprocess_string
 import multiprocessing
-from utils import database, cursor, conn, engine, NumpyEncoder
+from utils import field, cursor, conn, engine, NumpyEncoder
 
 
 gensim.parsing.preprocessing.STOPWORDS = set()
@@ -205,7 +205,7 @@ print(df.head())
 author_ids = df['authorID']
 author_names = df['name']
 author_names_len = [len(name) for name in author_names]
-lev_file = f'out/{database}/lev.json'
+lev_file = f'out/{field}/lev.json'
 
 def compute_levenshtein(pair):
     i, j = pair
@@ -276,6 +276,5 @@ for result in results:
     groups.loc[len(groups)] = result
 
 
-groups.to_csv(f'out/{database}/groups.csv', encoding='UTF-8', index=False)
-
-groups[(groups['similarity'] > 0.96) & (groups['lev_dis'] < 0.1)].to_csv(f'out/{database}/match.csv', index=False)
+# groups.to_csv(f'out/{field}/groups.csv', encoding='UTF-8', index=False)
+groups[(groups['similarity'] > 0.96) & (groups['lev_dis'] < 0.1)].to_csv(f'out/{field}/match.csv', index=False)

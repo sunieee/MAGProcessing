@@ -1,8 +1,8 @@
 import pandas as pd
-from utils import database, execute, cursor, conn
+from utils import field, execute, cursor, conn
 from tqdm import tqdm
 
-match_df = pd.read_csv(f'out/{database}/filtered.csv')
+match_df = pd.read_csv(f'out/{field}/match_modify.csv')
 
 ################################################################
 # 从后往前merge，只会删除后面的。这样在多个相同name情况下也能正常融合
@@ -21,12 +21,12 @@ for i in list(match_df.index)[::-1]:
     print('=' * 20)
     print(f'merging authors: {name2}({id2}) -> {name1}({id1})')
 
-    execute(f"""UPDATE {database}.paper_author_field
+    execute(f"""UPDATE paper_author_field
 SET authorID = '{id1}'
 WHERE authorID = '{id2}';
 """)
 
-    execute(f"DELETE FROM {database}.authors_field WHERE authorID = '{id2}';")
+    execute(f"DELETE FROM authors_field WHERE authorID = '{id2}';")
     authorIDs.add(id1)
 
 authorIDs_str = ', '.join([f"'{x}'" for x in authorIDs])
@@ -82,8 +82,13 @@ for authorID in tqdm(authorIDs):
     conn.commit()
     # print("Process author: ", authorName, " with rank ", str(authorRank))
 
+
+df_paper_author = pd.read_sql_query(f"""select * from paper_author_field""", conn)
+df_paper_author.to_csv(f'out/{field}/csv/paper_author.csv', index=False)
+
+df_authors = pd.read_sql_query(f"""select * from authors_field""", conn)
+df_authors.to_csv(f'out/{field}/csv/authors.csv', index=False)
+
+
 cursor.close()
 conn.close()
-
-
-

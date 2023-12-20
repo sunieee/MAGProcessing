@@ -3,10 +3,12 @@ import pymysql
 import time
 import json
 import numpy as np
+from datetime import datetime
 
 import sys
 import os
 import yaml
+import pandas as pd
 
 
 field = os.environ.get('field')
@@ -20,14 +22,19 @@ else:
     with open('config.yaml') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 field_info = config[database]
+for t in field_info.get('meta', []):
+    for k, v in t.items():
+        field_info[k] = v
 
+topN = int(field_info.get('topScholarNum', 5000))
+print('topN:', topN)
 
-def create_connection(database):
+def create_connection(database=database):
     conn = pymysql.connect(host='localhost',
-                                user=os.environ.get('user'),
-                                password=os.environ.get('password'),
-                                db=database,
-                                charset='utf8')
+                            user=os.environ.get('user'),
+                            password=os.environ.get('password'),
+                            db=database,
+                            charset='utf8')
     return conn, conn.cursor()
 
 
@@ -93,3 +100,39 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(obj, (np.bool_,)):
             return bool(obj)
         return json.JSONEncoder.default(self, obj)
+    
+
+def create_top():
+    suffix = 'ARC' if field.count("acl") else 'field'
+    cursor.execute(f'select hIndex_{suffix} from authors_{suffix} order by hIndex_{suffix} desc limit 1 offset {topN}')
+    hIndex0 = cursor.fetchone()[0]
+    print('MIN hIndex:', hIndex0)
+    assert hIndex0 > 5
+    filterCondition = f'hIndex_{suffix} >= {hIndex0}'
+
+    top_authors_path = f'out/{field}/top_authors.csv'
+    top_authors = pd.read_sql(f"""select * from authors_{suffix} where {filterCondition}""", conn)
+    top_authors.to_csv(top_authors_path, index=False)
+
+    top_authors['authorID'] = top_authors['authorID'].astype(str)
+    authorIDs = set(top_authors['authorID'].tolist())
+
+    print('loading data from database', datetime.now().strftime("%H:%M:%S"))
+    path_to_mapping = f"out/{field}/csv"
+    
+    df_paper_author = pd.read_csv(f"{path_to_mapping}/paper_author.csv")
+    df_papers = pd.read_csv(f"{path_to_mapping}/papers.csv")
+    df_authors = pd.read_csv(f"{path_to_mapping}/authors.csv")
+    
+    df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
+    df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
+    df_papers['paperID'] = df_papers['paperID'].astype(str)
+    df_authors['authorID'] = df_authors['authorID'].astype(str)
+    
+    df_papers['PublicationDate'] = pd.to_datetime(df_papers['PublicationDate'])
+    df_papers['year'] = df_papers['PublicationDate'].apply(lambda x: x.year)
+        
+    df_paper_author_filtered = df_paper_author[df_paper_author['authorID'].isin(authorIDs)]
+    df_paper_author_filtered = df_paper_author_filtered[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
+
+    return df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors
