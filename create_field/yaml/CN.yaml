@@ -1,0 +1,104 @@
+scigene_CN_field:
+  meta:
+  - fieldName: Networking & Parallel/Distributed/Real-time/Embedded Computing
+  - shortFieldName: CN
+  - topScholarNum: 20000
+  field:
+  - Computer network
+  - Telecommunications
+  - Real-time computing
+  - Distributed computing
+  - Parallel computing
+  - Embedded system
+  journal:
+  - Pervasive and Mobile Computing
+  - Personal and Ubiquitous Computing
+  - IEEE Journal on Selected Areas in Communications
+  - IEEE Transactions on Mobile Computing
+  - IEEE/ACM Transactions on Networking
+  - ACM Transactions on Internet Technology
+  - ACM Transactions on Multimedia Computing, Communications and Applications
+  - ACM Transactions on Sensor Networks
+  - Computer Networks
+  - IEEE Transactions on Communications
+  - IEEE Transactions on Wireless Communications
+  - Ad Hoc Networks
+  - Computer Communications
+  - IEEE Transactions on Network and Service Management
+  - IET Communications
+  - Journal of Network and Computer Applications
+  - Mobile Networks and Applications
+  - Peer-to-Peer Networking and Applications
+  - Wireless Communications and Mobile Computing
+  - Wireless Networks
+  - IEEE Internet of Things Journal
+  - IEEE Transactions on Computers
+  - IEEE Transactions on Parallel and Distributed Systems
+  - ACM Transactions on Embedded Computing Systems
+  - ACM Transactions on Reconfigurable Technology and Systems
+  - Journal of Parallel and Distributed Computing
+  - Journal of Systems Architecture_ Embedded Software Design
+  - Parallel Computing
+  - Performance Evaluation_ An International Journal
+  - Concurrency and Computation_ Practice and Experience
+  - Distributed Computing
+  - IEEE Transactions on Cloud Computing
+  - Journal of Grid computing
+  - Real-Time Systems
+  conference:
+  - UbiComp_ACM international joint conference on Pervasive and Ubiquitous Computing
+  - RTSS_IEEE Real-Time Systems Symposium
+  - MobiQuitous_International Conference on Mobile and Ubiquitous Systems_ Computing,Networking and Services
+  - UIC_IEEE International Conference on Ubiquitous Intelligence and Computing
+  - IEEE CLOUD_IEEE International Conference on Cloud Computing
+  - PPoPP_ACM SIGPLAN Symposium on Principles & Practice of Parallel Programming
+  - USENIX_ATC_USENIX Annual Technical Conference
+  - EuroSys_European Conference on Computer Systems
+  - SoCC_ACM Symposium on Cloud Computing
+  - SPAA_ACM Symposium on Parallelism in Algorithms and Architectures
+  - PODC_ACM Symposium on Principles of Distributed Computing
+  - CLUSTER_IEEE International Conference on Cluster Computing
+  - ICDCS_IEEE International Conference on Distributed Computing Systems
+  - HiPEAC_International Conference on High Performance and Embedded Architectures and Compilers
+  - SIGMETRICS_International Conference on Measurement and Modeling of Computer Systems
+  - ICPP_International Conference on Parallel Processing
+  - IPDPS_IEEE International Parallel & Distributed Processing Symposium
+  - HPDC_The International ACM Symposium on High-Performance Parallel and Distributed Computing
+  - RTAS_IEEE Real-Time and Embedded Technology and Applications Symposium
+  - Euro-Par_European Conference on Parallel and Distributed Computing
+  - ISPA_IEEE International Symposium on Parallel and Distributed Processing with Applications
+  - CCGRID_IEEE/ACM International Symposium on Cluster, Cloud and Grid Computing
+  - ICPADS_International Conference on Parallel and Distributed Systems
+  - SIGCOMM_ACM International Conference on Applications, Technologies, Architectures, and Protocols for Computer Communication
+  - MobiCom_ACM International Conference on Mobile Computing and Networking
+  - INFOCOM_IEEE International Conference on Computer Communications
+  - NSDI_Symposium on Network System Design and Implementation
+  - SenSys_ACM Conference on Embedded Networked Sensor Systems
+  - CoNEXT_ACM International Conference on Emerging Networking Experiments and Technologies
+  - SECON_IEEE International Conference on Sensing, Communication, and Networking
+  - IPSN_International Conference on Information Processing in Sensor Networks
+  - MobiSys_ACM International Conference on Mobile Systems, Applications, and Services
+  - ICNP_IEEE International Conference on Network Protocols
+  - MobiHoc_International Symposium on Theory, Algorithmic Foundations, and Protocol Design for Mobile Networks and Mobile Computing
+  - NOSSDAV_International Workshop on Network and Operating System Support for Digital Audio and Video
+  - IWQoS_IEEE/ACM International Workshop on Quality of Service
+  - IMC_ACM Internet Measurement Conference
+  - ANCS_ACM/IEEE Symposium on Architectures for Networking and Communication Systems
+  - APNOMS_Asia-Pacific Network Operations and Management Symposium
+  - FORTE_International Conference on Formal Techniques for Distributed Objects, Components, and Systems
+  - LCN_IEEE Conference on Local Computer Networks
+  - GLOBECOM_IEEE Global Communications Conference
+  - ICC_IEEE International Conference on Communications
+  - ICCCN_IEEE International Conference on Computer Communications and Networks
+  - MASS_IEEE International Conference on Mobile Adhoc and Sensor Systems
+  - P2P_IEEE International Conference on Peer-to-Peer Computing
+  - IPCCC_IEEE International Performance Computing and Communications Conference
+  - WoWMoM_IEEE International Symposium on a World of Wireless, Mobile and Multimedia Networks
+  - ISCC_IEEE Symposium on Computers and Communications
+  - WCNC_IEEE Wireless Communications and Networking Conference
+  - Networking_IFIP International Conferences on Networking
+  - IM_IFIP/IEEE International Symposium on Integrated Network Management
+  - MSN_International Conference on Mobility, Sensing and Networking
+  - MSWiM_International Conference on Modeling, Analysis and Simulation of Wireless and Mobile Systems
+  - WASA_International Conference on Wireless Algorithms, Systems, and Applications
+  - HotNets_ACM The Workshop on Hot Topics in Networks

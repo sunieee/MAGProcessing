@@ -17,7 +17,7 @@ userpass = f'{os.environ.get("user")}:{os.environ.get("password")}'
 GROUP_SIZE = 2000
 multiproces_num = 20
 
-paper_path = f'out/{field}/csv/papers.txt'
+paper_path = f'out/{field}/papers.txt'
 papers = list(np.loadtxt(paper_path, dtype=str))
 
 ####################################################################################
@@ -48,7 +48,7 @@ def get_data_from_table_concurrent(table_name, key='paperID', data=papers):
     pbar = tqdm(total=group_num)
     params = [(data[i*GROUP_SIZE:(i+1)*GROUP_SIZE], i, pbar) for i in range(group_num)]
     print(f'## create params in {table_name}({key}), length: {group_num}')
-    with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num * 5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num * 10) as executor:
         results = executor.map(_query, params)
 
     # 将所有结果合并
@@ -73,13 +73,39 @@ df_paper_author.to_csv(f'out/{field}/csv/paper_author.csv',index=False)
 
 citing_db = get_data_from_table_concurrent('paper_reference', key='citingpaperID')
 cited_db = get_data_from_table_concurrent('paper_reference', key='citedpaperID')
-df_paper_reference_MAG = pd.concat([citing_db, cited_db])
-print('paper_reference original', df_paper_reference_MAG.shape)
-df_paper_reference_MAG=df_paper_reference_MAG.drop_duplicates()
-print('paper_reference drop_duplicates', df_paper_reference_MAG.shape)
-df_paper_reference_MAG.to_csv(f'out/{field}/csv/paper_reference.csv',index=False)
+df_paper_reference = pd.concat([citing_db, cited_db])
+print('paper_reference original', df_paper_reference.shape)
+df_paper_reference=df_paper_reference.drop_duplicates()
+print('paper_reference drop_duplicates', df_paper_reference.shape)
+df_paper_reference.to_csv(f'out/{field}/csv/paper_reference.csv',index=False)
 
 df_authors = get_data_from_table_concurrent('authors', key='authorID', data=authors)
+df_authors.to_csv(f'out/{field}/csv/authors.csv',index=False)
+
+#######################################################################
+# update authors_field
+# 计算并添加作者在领域内的论文及引用数量，更新作者的引用总数信息
+# 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
+#######################################################################
+print("## Step 1: Calculate Paper Count", datetime.now().strftime('%H:%M:%S'))
+paper_count = df_paper_author.groupby('authorID')['paperID'].count().reset_index(name='PaperCount_field')
+
+print("## Step 2: Calculate Total Citations", datetime.now().strftime('%H:%M:%S'))
+# rename columns of df_papers {a:b}
+df_papers.rename(columns={'citationCount':'CitationCount'}, inplace=True)
+total_citations = df_paper_author.merge(df_papers, on='paperID')
+total_citations = total_citations[total_citations['CitationCount'] >= 0]
+total_citations = total_citations.groupby('authorID')['CitationCount'].sum().reset_index(name='CitationCount_field')
+
+print("## Step 3: Merge Calculations with df_authors", datetime.now().strftime('%H:%M:%S'))
+df_authors = df_authors.merge(paper_count, on='authorID', how='left')
+df_authors = df_authors.merge(total_citations, on='authorID', how='left')
+
+df_authors['PaperCount_field'] = df_authors['PaperCount_field'].fillna(0)
+df_authors['CitationCount_field'] = df_authors['CitationCount_field'].fillna(0)
+df_authors['hIndex_field'] = 0
+
+
 df_authors.to_csv(f'out/{field}/csv/authors.csv',index=False)
 
 
@@ -88,26 +114,26 @@ df_authors.to_csv(f'out/{field}/csv/authors.csv',index=False)
 # 读取四个子表，并上传到mysql。创建表后添加领域子表的mysql索引（例如在scigene_field_field库）
 ####################################################################################
 print('## uploading papers', datetime.now().strftime('%H:%M:%S'))
-# df_papers_MAG = pd.read_csv(f'out/{field}/csv/papers.csv')
+# df_papers = pd.read_csv(f'out/{field}/csv/papers.csv')
 print(df_papers, df_papers.shape)
 df_papers.to_sql('papers_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=100),\
     "title": sqlalchemy.types.NVARCHAR(length=2000),"ConferenceID": sqlalchemy.types.NVARCHAR(length=15),"JournalID": sqlalchemy.types.NVARCHAR(length=15),\
         "rank":sqlalchemy.types.INTEGER(),"referenceCount":sqlalchemy.types.INTEGER(),"citationCount":sqlalchemy.types.INTEGER(),"PublicationDate":sqlalchemy.types.Date()})
 
 print('## uploading paper_author', datetime.now().strftime('%H:%M:%S'))
-# paper_author_MAG = pd.read_csv(f'out/{field}/csv/paper_author.csv')
+# paper_author = pd.read_csv(f'out/{field}/csv/paper_author.csv')
 print(df_paper_author, df_paper_author.shape)
 df_paper_author.to_sql('paper_author_field',con=engine,if_exists='replace',index=False, dtype={"paperID": sqlalchemy.types.NVARCHAR(length=15),\
     "authorID": sqlalchemy.types.NVARCHAR(length=15),"authorOrder":sqlalchemy.types.INTEGER()})
 
 print('## uploading paper_reference', datetime.now().strftime('%H:%M:%S'))
-# df_paper_reference_MAG = pd.read_csv(f'out/{field}/csv/paper_reference.csv')
-print(df_paper_reference_MAG, df_paper_reference_MAG.shape)
-df_paper_reference_MAG.to_sql('paper_reference_field',con=engine,if_exists='replace',index=False, dtype={"citingpaperID": sqlalchemy.types.NVARCHAR(length=15),\
+# df_paper_reference = pd.read_csv(f'out/{field}/csv/paper_reference.csv')
+print(df_paper_reference, df_paper_reference.shape)
+df_paper_reference.to_sql('paper_reference_field',con=engine,if_exists='replace',index=False, dtype={"citingpaperID": sqlalchemy.types.NVARCHAR(length=15),\
     "citedpaperID": sqlalchemy.types.NVARCHAR(length=15)})
 
 print('## uploading authors', datetime.now().strftime('%H:%M:%S'))
-# authors_MAG = pd.read_csv(f'out/{field}/csv/authors.csv')
+# authors = pd.read_csv(f'out/{field}/csv/authors.csv')
 print(df_authors, df_authors.shape)
 df_authors.to_sql('authors_field',con=engine,if_exists='replace',index=False, dtype={"authorID": sqlalchemy.types.NVARCHAR(length=15),\
     "name": sqlalchemy.types.NVARCHAR(length=999),"rank":sqlalchemy.types.INTEGER(),"PaperCount":sqlalchemy.types.INTEGER(),"CitationCount":sqlalchemy.types.INTEGER()})
@@ -134,45 +160,3 @@ update papers_field as P, MACG.abstracts as abs set P.abstract = abs.abstract wh
 -- delete abstract mediumtext
 ALTER TABLE papers_field DROP abstract;
 '''
-
-
-#######################################################################
-# update authors_field
-# 计算并添加作者在领域内的论文及引用数量，更新作者的引用总数信息
-# 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
-#######################################################################
-print('updating authors_field')
-
-try_execute("ALTER TABLE authors_field DROP COLUMN PaperCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN CitationCount_field;")
-try_execute("ALTER TABLE authors_field DROP COLUMN hIndex_field;")
-
-execute('''
-ALTER TABLE authors_field ADD PaperCount_field INT DEFAULT 0;
-UPDATE authors_field af
-JOIN (
-    SELECT authorID, COUNT(*) as count_papers
-    FROM paper_author_field
-    GROUP BY authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.PaperCount_field = tmp.count_papers;
-
-ALTER TABLE authors_field ADD CitationCount_field INT DEFAULT 0;
-UPDATE authors_field af
-JOIN (
-    SELECT PA.authorID, SUM(P.citationCount) as total_citations
-    FROM papers_field as P 
-    JOIN paper_author_field as PA on P.paperID = PA.paperID 
-    WHERE P.CitationCount >= 0 
-    GROUP BY PA.authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.CitationCount_field = tmp.total_citations;
-
-ALTER TABLE authors_field ADD hIndex_field INT DEFAULT 0;
-''')
-
-
-cursor.close()
-conn.close()
-
-

@@ -1,11 +1,20 @@
-from utils import cursor, conn
+import pymysql
 
+def create_connection(database='MACG'):
+    conn = pymysql.connect(host='localhost',
+                            user='root',
+                            password='root',
+                            db=database,
+                            charset='utf8')
+    return conn, conn.cursor()
+
+conn, cursor = create_connection()
 
 # src_db = 'scigene_visualization_field'
 # dst_db = 'scigene_visualization_field_old'
 
-src_db = 'scigene_visualization2_field'
-dst_db = 'scigene_visualization_field'
+src_db = 'scigene_AIChild_field'
+dst_db = 'scigene_AI1_field'
 
 cursor.execute(f'create database if not exists {dst_db}')
  # Show tables in MAG

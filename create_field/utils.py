@@ -14,7 +14,6 @@ import pandas as pd
 field = os.environ.get('field')
 database = f'scigene_{field}_field'
 
-
 if os.path.exists(f'yaml/{field}.yaml'):
     with open(f'yaml/{field}.yaml') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)

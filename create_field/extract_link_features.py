@@ -14,9 +14,12 @@ import math
 import multiprocessing
 
 # import all needed variable from utils
-from utils import *
+if os.environ.get('field') in ['fellow']:
+    from utils_scholar import *
+else:
+    from utils import *
+    df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors = create_top()
 
-df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors = create_top()
 edges = pd.read_csv(f'out/{field}/edges.csv')
 edges['authorID'] = edges['authorID'].astype(str)
 edges['citingpaperID'] = edges['citingpaperID'].astype(str)

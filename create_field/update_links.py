@@ -8,6 +8,7 @@ import multiprocessing
 
 
 field = os.environ.get('field')
+process_num = multiprocessing.cpu_count()
 
 def create_connection(database):
     conn = pymysql.connect(host='localhost',
@@ -48,8 +49,9 @@ else:
 
     data = list(zip(edge_df['citingpaperID'], edge_df['citedpaperID']))
     # citation2context = fetch_citation_context(data)
-    with multiprocessing.Pool(processes=10) as pool:
-        results = pool.map(fetch_citation_context, [data[i::10] for i in range(10)])
+    
+    with multiprocessing.Pool(processes=process_num) as pool:
+        results = pool.map(fetch_citation_context, [data[i::process_num] for i in range(process_num)])
     citation2context = {}
     for result in results:
         citation2context.update(result)
@@ -72,7 +74,7 @@ def extract_citation_context(authorID):
     df['citationContext'] = df.apply(lambda row: citation2context.get(row['childrenID'] + ',' + row['parentID']), axis=1)
     df.to_csv(f'out/{field}/links/{authorID}.csv', index=False)
 
-with multiprocessing.Pool(processes=20) as pool:
+with multiprocessing.Pool(processes=process_num) as pool:
     pool.map(extract_citation_context, authorID_list)
 
 """

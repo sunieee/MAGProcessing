@@ -155,7 +155,7 @@ scigene_AI_field:
     - Natural language processing
     - Data science
 
-scigene_AIChild_field:
+scigene_AIFull_field:
   field:
     - Information retrieval
     - Speech recognition

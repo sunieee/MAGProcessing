@@ -25,7 +25,25 @@ paper_ids = set()
 
 paper_path = f'out/{field}/papers.txt'
 if os.path.exists(paper_path):
+    # if field == 'AI3':
+    #     # paper_ids = set()
+    #     paper_ids = set(np.loadtxt(paper_path, dtype=str))
+    # else:
     raise "paper already exist!"
+
+def split_string(full_string):
+    # Split the string into words
+    print('original string', full_string)
+    words = full_string.split()
+    if len(words) == 1:
+        return '', full_string
+    first_word_parts = words[0].rsplit('_', 1)
+    if len(first_word_parts) == 2:
+        abbr = first_word_parts[0].replace('_', ' ')
+        name = first_word_parts[1] + ' ' + ' '.join(words[1:])
+        return abbr, name
+    return full_string.split('_', 1)
+
 
 if os.path.exists(f'out/{field}/journal_conference_modify.csv'):
     journal_conference = pd.read_csv(f'out/{field}/journal_conference_modify.csv')
@@ -43,18 +61,26 @@ else:
         }
 
     pattern = {
-        'and': ['&'],
-        '_': [':', ' -', '-'],
+        ' and ': [' & '],
+        '_': [':', ' -', '-', '–'],
+        '/': [' '],
+        ' on ': [' in ']
     }
+    unmatchedJournal = []
     for original in field_info.get('journal', []):
         journalName = original
-        sql_data = f"select JournalID, name from journals where name like '%%{journalName}%%';"
+        sql_data = f"select JournalID, name from journals where name='{journalName}';"
         print('*', sql_data)
         db_data = pd.read_sql_query(sql_data, engine)
 
         if len(db_data) == 0 :
+            sql_data = f"select JournalID, name from journals where name like '%%{journalName}%%';"
+            print('*', sql_data)
+            db_data = pd.read_sql_query(sql_data, engine)
+
+        if len(db_data) == 0 :
             for k, v in pattern.items():
-                if k in original:
+                if original.count(k):
                     for _v in v:
                         journalName = original.replace(k, _v)
                         sql_data = f"select JournalID, name from journals where name like '%%{journalName}%%';"
@@ -62,7 +88,7 @@ else:
                         db_data = pd.read_sql_query(sql_data, engine)
                         if len(db_data) > 0:
                             break
-
+        
         for row in db_data.to_records():
             journal_conference.loc[len(journal_conference)] = {
                 'type': 'journal',
@@ -72,7 +98,8 @@ else:
             }
 
         if len(db_data) == 0:
-            print(f'{journalName} not found')
+            print(f'{original} not found')
+            unmatchedJournal.append(original)
             journal_conference.loc[len(journal_conference)] = {
                 'type': 'journal',
                 'original': original,
@@ -91,16 +118,34 @@ else:
             'name': abbreviation + '_' + conferenceName
         }
 
-    for original in field_info.get('conference', []):
-        abbreviation, conferenceName = original.split('_', 1)
-        conferenceName = conferenceName.replace('_', ':')
-        sql_data = f"select ConferenceID, abbreviation, name from conferences where name like '%%{conferenceName}%%';"
+    for original in unmatchedJournal + field_info.get('conference', []):
+        # abbreviation, conferenceName = original.split('_', 1)
+        print(original)
+        abbreviation, conferenceName = split_string(original)
+        sql_data = f"select ConferenceID, abbreviation, name from conferences where name='{conferenceName}';"
         print('*', sql_data)
         db_data = pd.read_sql_query(sql_data, engine)
+
+        if len(db_data) == 0:
+            sql_data = f"select ConferenceID, abbreviation, name from conferences where name like '%%{conferenceName}%%';"
+            print('*', sql_data)
+            db_data = pd.read_sql_query(sql_data, engine)
+
         if len(db_data) == 0:
             sql_data = f"select ConferenceID, abbreviation, name from conferences where abbreviation='{abbreviation}';"
             print('*', sql_data)
             db_data = pd.read_sql_query(sql_data, engine)
+
+        if len(db_data) == 0 :
+            for k, v in pattern.items():
+                if conferenceName.count(k):
+                    for _v in v:
+                        t = conferenceName.replace(k, _v)
+                        sql_data = f"select ConferenceID, abbreviation, name from conferences where name like '%%{t}%%';"
+                        print('*', sql_data)
+                        db_data = pd.read_sql_query(sql_data, engine)
+                        if len(db_data) > 0:
+                            break
 
         for row in db_data.to_records():
             journal_conference.loc[len(journal_conference)] = {
@@ -146,6 +191,9 @@ def get_paperID_batch(pair):
 
 
 def get_field(field):
+    pattern = {
+        '-': ['–', ':', ' -'],
+    }
     try:
         fieldID = int(field)
         cursor.execute(f"SELECT name, paperCount FROM MACG.field_of_study where fieldID='{fieldID}'")
@@ -156,8 +204,21 @@ def get_field(field):
         fieldName = field
         cursor.execute(f"SELECT fieldID, paperCount  FROM MACG.field_of_study where name='{fieldName}'")
         result = cursor.fetchone()
-        fieldID = result[0]
-        paperCount = result[1]
+        if result is not None:
+            fieldID = result[0]
+            paperCount = result[1]
+        else:
+            for k, v in pattern.items():
+                if k in field:
+                    for _v in v:
+                        fieldName = field.replace(k, _v)
+                        cursor.execute(f"SELECT fieldID, paperCount  FROM MACG.field_of_study where name='{fieldName}'")
+                        result = cursor.fetchone()
+                        if result is not None:
+                            fieldID = result[0]
+                            paperCount = result[1]
+                            break
+        
     return fieldID, fieldName, paperCount
 
 
@@ -167,16 +228,17 @@ def read_papers(fields, parent=None):
     for field in tqdm(fields):
         start_count = len(paper_ids)
         fieldID, fieldName, paperCount = get_field(field)
-        group_num = paperCount // GROUP_SIZE + 5
-        pbar = tqdm(total=group_num)
-        print(f'filedID: {fieldID}, paperCount: {paperCount}, group_num: {group_num}')
-        with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num) as executor:
-            results = executor.map(get_paperID_batch, [(fieldID, i*GROUP_SIZE, i, pbar, verbose) for i in range(group_num)])
-        
-        # 将所有结果合并
-        db_data = set()
-        for result in tqdm(results):
-            db_data.update(result)
+        if paperCount < 10000:
+            db_data = pd.read_sql_query(f'select paperID from papers_field where fieldID=\'{fieldID}\';', engine)['paperID'].tolist()
+        else:
+            group_num = paperCount // GROUP_SIZE + 3
+            pbar = tqdm(total=group_num)
+            print(f'filedID: {fieldID}, paperCount: {paperCount}, group_num: {group_num}')
+            with concurrent.futures.ThreadPoolExecutor(max_workers=multiproces_num) as executor:
+                results = executor.map(get_paperID_batch, [(fieldID, i*GROUP_SIZE, i, pbar, verbose) for i in range(group_num)])
+            db_data = set()
+            for result in results:
+                db_data.update(result)
 
         paper_ids.update(db_data)
         paper_count.loc[len(paper_count)] = {
@@ -198,13 +260,18 @@ read_papers(field_info.get('field', []))
 print(f'## finish reading paperID on field:', len(paper_ids))
 
 
-for field in field_info.get('children', []):
-    fieldID, fieldName, paperCount = get_field(field)
+for f in field_info.get('children', []):
+    fieldID, fieldName, paperCount = get_field(f)
     sql_data = f'select childrenID FROM field_children where parentID=\'{fieldID}\';'
     children_fields = pd.read_sql_query(sql_data, engine).values.ravel().tolist()
     print('*', sql_data, len(children_fields))
     read_papers(children_fields, parent=fieldName)
     print(f'finish reading paperID on children of {fieldName}({fieldID}), #accumulate: {len(paper_ids)}')
+
+    print(f'### finish reading child: {f}, saving to txt', len(paper_ids))
+    np.savetxt(paper_path, list(paper_ids), fmt='%s')
+    paper_count.to_csv(f'out/{field}/paper_count.csv', index=False)
+
 print(f'## finish reading paperID on children:', len(paper_ids))
 
 
@@ -236,6 +303,7 @@ conferenceIDs = [c for c in conferenceIDs if str(c) != 'nan' and str(c) != 'None
 for conferenceID in tqdm(conferenceIDs):
     sql_data = f'select paperID from papers where ConferenceID=\'{conferenceID}\';'
     print('*', sql_data)
+    start_count = len(paper_ids)
     db_data = pd.read_sql_query(sql_data, engine)['paperID'].tolist()
     paper_ids.update(db_data)
     paper_count.loc[len(paper_count)] = {
@@ -251,11 +319,7 @@ for conferenceID in tqdm(conferenceIDs):
     print(f'finish reading paperID on Conference {conferenceID}, single: {len(db_data)}, all: {len(paper_ids)}')
 print(f'## finish reading paperID on Conference:', len(paper_ids))
 
-papers = list(paper_ids)
-print('# finish reading MAG list from sql, saving to txt', len(papers))
-
-# save list(MAG) to a txt file
-np.savetxt(paper_path, papers, fmt='%s')
-print('# finish saving MAG list to txt file')
+print('# finish reading MAG list from sql, saving to txt', len(paper_ids))
+np.savetxt(paper_path, list(paper_ids), fmt='%s')
 
 paper_count.to_csv(f'out/{field}/paper_count.csv', index=False)

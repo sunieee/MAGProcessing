@@ -12,7 +12,7 @@ import pandas as pd
 import gensim
 from gensim.parsing.preprocessing import preprocess_string
 import multiprocessing
-from utils import field, cursor, conn, engine, NumpyEncoder
+from utils import field, cursor, conn, engine, NumpyEncoder, topN
 
 
 gensim.parsing.preprocessing.STOPWORDS = set()
@@ -183,7 +183,9 @@ def test():
 
 # 在融合作者时，我们只关心前3000人，后面的人不重要，节省计算量
 # 获取第3000人的hIndex0，并得到所有hIndex >= hIndex0的人
-cursor.execute('select hIndex_field from authors_field order by hIndex_field desc limit 1 offset 3000')
+# num = max(int(topN * 0.5), 3000)
+num = 5000
+cursor.execute(f'select hIndex_field from authors_field order by hIndex_field desc limit 1 offset {num}')
 hIndex0 = cursor.fetchone()[0]
 print('MIN hIndex:', hIndex0)
 assert hIndex0 > 0
@@ -211,47 +213,47 @@ def compute_levenshtein(pair):
     i, j = pair
     return pair, levenshtein_distance(author_names[i], author_names[j]) / (author_names_len[i] + author_names_len[j])
 
-if os.path.exists(lev_file):
-    with open (lev_file, 'r') as f:
-        lev_lis = json.load(f)
-else:
-    lev_dic = {}
-    pairs = []
-    print('filtering pairs...')
-    for i in tqdm(range(len(author_names))):
-        for j in range(len(author_names)):
-            if i < j:
-                la = author_names_len[i]
-                lb = author_names_len[j]
-                if abs(la - lb) / (la + lb) < 0.2: # and abs(math.log2(la) - math.log2(lb)) < 1:
-                    pairs.append((i,j))
+# if os.path.exists(lev_file):
+#     with open (lev_file, 'r') as f:
+#         lev_lis = json.load(f)
+# else:
+lev_dic = {}
+pairs = []
+print('filtering pairs...')
+for i in tqdm(range(len(author_names))):
+    for j in range(len(author_names)):
+        if i < j:
+            la = author_names_len[i]
+            lb = author_names_len[j]
+            if abs(la - lb) / (la + lb) <= 0.1: # and abs(math.log2(la) - math.log2(lb)) < 1:
+                pairs.append((i,j))
 
-    # for i, j in tqdm(pairs):
-    #     lev_dic[(i,j)] = levenshtein_distance(author_names[i], author_names[j]) / (len(author_names[i]) + len(author_names[j]))
-    # 使用多进程计算编辑距离
-    print('computing levenshtein distances...(60s)')
-    # 为了最大化并行计算的效率，进程的数量设置为与CPU核心数相同是一个好的起点。
-    # 但是，最佳的进程数量可能还取决于具体的任务和其他系统负载
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        # 创建一个进度条
-        # pbar = tqdm(total=len(pairs))
-        # # 使用imap或imap_unordered，并迭代结果来更新进度条
-        # results = []
-        # for result in pool.imap(compute_levenshtein, pairs):
-        #     results.append(result)
-        #     pbar.update()
-        # pbar.close()
+# for i, j in tqdm(pairs):
+#     lev_dic[(i,j)] = levenshtein_distance(author_names[i], author_names[j]) / (len(author_names[i]) + len(author_names[j]))
+# 使用多进程计算编辑距离
+print(f'computing levenshtein distances...({int(len(pairs)/100000)}s)', len(pairs))
+# 为了最大化并行计算的效率，进程的数量设置为与CPU核心数相同是一个好的起点。
+# 但是，最佳的进程数量可能还取决于具体的任务和其他系统负载
+with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+    # 创建一个进度条
+    # pbar = tqdm(total=len(pairs))
+    # # 使用imap或imap_unordered，并迭代结果来更新进度条
+    # results = []
+    # for result in pool.imap(compute_levenshtein, pairs):
+    #     results.append(result)
+    #     pbar.update()
+    # pbar.close()
 
-        # 有进度条只有33%，没有进度条能够达到100%CPU利用率，20min程序总共1min跑完
-        results = pool.map(compute_levenshtein, pairs)
-    lev_dic = dict(results)
-    
-    # sort lev_dic by values
-    lev_lis = list(sorted(lev_dic.items(), key=lambda item: item[1]))
-    lev_lis = [g for g in lev_lis if g[1] <= 0.25]
+    # 有进度条只有33%，没有进度条能够达到100%CPU利用率，20min程序总共1min跑完
+    results = pool.map(compute_levenshtein, pairs)
+lev_dic = dict(results)
 
-    with open(lev_file, 'w') as f:
-        json.dump(lev_lis, f, cls=NumpyEncoder)
+# sort lev_dic by values
+lev_lis = list(sorted(lev_dic.items(), key=lambda item: item[1]))
+lev_lis = [g for g in lev_lis if g[1] <= 0.1]
+
+with open(lev_file, 'w') as f:
+    json.dump(lev_lis, f, cls=NumpyEncoder)
 
 groups = pd.DataFrame(columns=['id1', 'id2', 'name1', 'name2', 'lev_dis', 'similarity'])
 
@@ -277,4 +279,4 @@ for result in results:
 
 
 # groups.to_csv(f'out/{field}/groups.csv', encoding='UTF-8', index=False)
-groups[(groups['similarity'] > 0.96) & (groups['lev_dis'] < 0.1)].to_csv(f'out/{field}/match.csv', index=False)
+groups[groups['similarity'] > 0.96].to_csv(f'out/{field}/match.csv', index=False)

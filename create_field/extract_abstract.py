@@ -16,16 +16,14 @@ from utils import *
 multiproces_num = 20
 
 # read authors table from sql
-# df_authors = pd.read_csv(f"out/{field}/authors.csv")
+# df_authors = pd.read_csv(f"out/csv/{field}/authors.csv")
 # df_authors['authorID'] = df_authors['authorID'].astype(str)
 conn, cursor = create_connection(database)
-df_authors = pd.read_sql_query(f"""select * from authors_field""", conn)
-df_authors.to_csv(f'out/{field}/authors.csv', index=False)
-
-df_paper_author = pd.read_csv(f"out/{field}/paper_author.csv")
+df_authors = pd.read_csv(f"out/{field}/csv/authors.csv")
+df_paper_author = pd.read_csv(f"out/{field}/csv/paper_author.csv")
 df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
 df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
-df_papers = pd.read_csv(f"out/{field}/papers.csv")
+df_papers = pd.read_csv(f"out/{field}/csv/papers.csv")
 df_papers['paperID'] = df_papers['paperID'].astype(str)
 
 print('load data finished', datetime.now().strftime("%H:%M:%S"))
@@ -70,10 +68,10 @@ conn.commit()
 
 ###################################################################
 # 创建topAuthor
-papers_top, _, _, df_paper_author_filtered = create_top()
+papers_top, _, _, df_paper_author_filtered, _ = create_top()
 paperIDs = set(df_paper_author_filtered['paperID'].drop_duplicates().tolist())
 
-papers_top = pd.read_csv(f'out/{field}/papers.csv')
+papers_top = pd.read_csv(f'out/{field}/csv/papers.csv')
 papers_top['paperID'] = papers_top['paperID'].astype(str)
 papers_top = papers_top[papers_top['paperID'].isin(paperIDs)]
 papers_top = papers_top[['paperID', 'title']]

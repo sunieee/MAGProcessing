@@ -5,9 +5,14 @@ import multiprocessing
 from tqdm import tqdm
 import json
 
+if os.environ.get('field') in ['fellow']:
+    from utils_scholar import *
+else:
+    from utils import *
+    df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors = create_top()
+    authorIDs = set(top_authors['authorID'].tolist())
+
 path_to_mapping = f"out/{field}/csv"
-df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors = create_top()
-authorIDs = set(top_authors['authorID'].tolist())
 
 # 直接从paper_reference表中筛选出自引的记录
 print('creating node & edges', datetime.now().strftime("%H:%M:%S"))

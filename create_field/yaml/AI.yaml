@@ -1,0 +1,35 @@
+scigene_AI_field:
+  meta:
+  - fieldName: Artificial Intelligence
+  - shortFieldName: AI
+  - topScholarNum: 50000
+  field:
+  - Information retrieval
+  - Speech recognition
+  - Computer vision
+  - Multimedia
+  - Knowledge management
+  - Machine learning
+  - Data mining
+  - World Wide web
+  - Artificial intelligence
+  - Pattern recognition
+  - Natural language processing
+  - Data science
+  children: 
+  - Machine Learning # 686w
+  - Data mining
+  - Artificial intelligence
+  journal:
+  - Artificial Intelligence
+  - IEEE Transactions on Pattern Analysis and Machine Intelligence
+  - International Journal of Computer Vision Springer
+  - Journal of Machine Learning Research MIT Press
+  conference:
+  - AAAI_AAAI Conference on Artificial Intelligence
+  - NeurIPS_Conference on Neural Information Processing Systems
+  - ACL_Annual Meeting of the Association for Computational Linguistics
+  - CVPR_IEEE/CVF Computer Vision and Pattern Recognition Conference
+  - ICCV_International Conference on Computer Vision
+  - ICML_International Conference on Machine Learning
+  - IJCAI_International Joint Conference on Artificial Intelligence

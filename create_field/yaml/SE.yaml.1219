@@ -1,0 +1,56 @@
+scigene_SE_field:
+  meta:
+  - fieldName: Software & Programming Language
+  - shortFieldName: SE
+  - topScholarNum: 10000
+  field:
+  - Software engineering
+  - Operating system
+  - Programming language
+  journal:
+  - ACM Transactions on Programming Languages and Systems
+  - ACM Transactions on Software Engineering and Methodology
+  - IEEE Transactions on Software Engineering
+  - IEEE Transactions on Services Computing
+  - Automated Software Engineering
+  - Empirical Software Engineering
+  - IET Software
+  - Information and Software Technology
+  - Journal of Functional Programming
+  - Journal of Software_ Evolution and Process
+  - Journal of Systems and Software
+  - Requirements Engineering
+  - Science of Computer Programming
+  - Software and Systems Modeling
+  - Software Testing, Verification and Reliability
+  - Software_ Practice and Experience
+  conference:
+  - PLDI_ACM SIGPLAN Conference on Programming Language Design and Implementation
+  - POPL_ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages
+  - FSE/ESEC_ACM Joint European Software Engineering Conference and Symposium on the Foundations of Software Engineering
+  - SOSP_ACM Symposium on Operating Systems Principles
+  - OOPSLA_Conference on Object-Oriented Programming Systems, Languages, and Applications
+  - ASE_International Conference on Automated Software Engineering
+  - ICSE_International Conference on Software Engineering
+  - ISSTA_International Symposium on Software Testing and Analysis
+  - OSDI_USENIX Symposium on Operating Systems Design and Implementation
+  - FM_International Symposium on Formal Methods
+  - ECOOP_European Conference on Object-Oriented Programming
+  - ETAPS_European Joint Conferences on Theory and Practice of Software
+  - ICPC_IEEE International Conference on Program Comprehension
+  - RE_IEEE International Requirements Engineering Conference
+  - CAiSE_International Conference on Advanced Information Systems Engineering
+  - ICFP_ACM SIGPLAN International Conference on Function Programming
+  - LCTES_ACM SIGPLAN/SIGBED International Conference on Languages, Compilers and Tools for Embedded Systems
+  - MoDELS_ACM/IEEE International Conference on Model Driven Engineering Languages and Systems
+  - CP_International Conference on Principles and Practice of Constraint Programming
+  - ICSOC_International Conference on Service Oriented Computing
+  - SANER_IEEE International Conference on Software Analysis, Evolution, and Reengineering
+  - ICSME_International Conference on Software Maintenance and Evolution
+  - VMCAI_International Conference on Verification, Model Checking and Abstract Interpretation
+  - ICWS_IEEE International Conference on Web Services
+  - Middleware_International Middleware Conference
+  - SAS_International Static Analysis Symposium
+  - ESEM_International Symposium on Empirical Software Engineering and Measurement
+  - ISSRE_IEEE International Symposium on Software Reliability Engineering
+  - HotOS_USENIX Workshop on Hot Topics in Operating Systems

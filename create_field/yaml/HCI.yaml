@@ -1,0 +1,34 @@
+scigene_HCI_field:
+  meta:
+  - fieldName: Human-Computer Interaction
+  - shortFieldName: HCI
+  - topScholarNum: 5000
+  field:
+  - Human-computer interaction
+  journal:
+  - ACM Transactions on Computer-Human Interaction
+  - International Journal of Human-Computer Studies
+  - Computer Supported Cooperative Work
+  - Human-Computer Interaction
+  - IEEE Transactions on Human-Machine Systems
+  - Interacting with Computers
+  - International Journal of Human-Computer Interaction
+  - User Modeling and User-Adapted Interaction
+  - Behaviour & Information Technology
+  - Personal and Ubiquitous Computing
+  - Pervasive and Mobile Computing
+  - Proceedings of the ACM on Human—Computer Interaction
+  conference:
+  - CSCW_ACM Conference On Computer- Supported Cooperative Work And Social Computing
+  - CHI_ACM Conference on Human Factors in Computing Systems
+  - UbiComp_ACM international joint conference on Pervasive and Ubiquitous Computing
+  - UIST_ACM Symposium on User Interface Software andTechnology
+  - GROUP_ACM International Conference on Supporting Group Work
+  - IUI_ACM International Conference on Intelligent User Interfaces
+  - ITS_ACM International Conference on Interactive Tabletops and Surfaces
+  - ECSCW_European Conference on Computer Supported Cooperative Work
+  - PERCOM_IEEE International Conference on Pervasive Computing and Communications
+  - MobileHCI_ACM International Conference on Mobile Human-ComputerInteraction
+  - INTERACT_International Conference on Human- Computer Interaction of International Federation for Information Processing
+  - CSCWD_International Conference on Computer Supported Cooperative Work in Design
+  - AVI_International Working Conference on Advanced Visual Interfaces

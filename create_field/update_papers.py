@@ -13,8 +13,11 @@ import re
 
 
 field = os.environ.get('field')
-suffix = 'ARC' if field.count("acl_anthology") else 'field'
+suffix = '_ARC' if field.count("acl_anthology") else '_field'
 database = f'scigene_{field}_field'
+if field in ['fellow']:
+    suffix = ''
+    database = 'MACG'
 
 def create_connection(database):
     conn = pymysql.connect(host='localhost',
@@ -56,11 +59,11 @@ def extract_paper_authors(pairs):
 
     # 使用IN子句一次查询多个paperID
     paper_ids_str = ', '.join([f"'{x}'" for x in papers])
-    cursor.execute(f"""SELECT paper_author_{suffix}.paperID, authors_{suffix}.name
-                       FROM paper_author_{suffix} 
-                       JOIN authors_{suffix} ON paper_author_{suffix}.authorID=authors_{suffix}.authorID 
-                       WHERE paper_author_{suffix}.paperID IN ({paper_ids_str})
-                       ORDER BY paper_author_{suffix}.paperID, paper_author_{suffix}.authorOrder;""")
+    cursor.execute(f"""SELECT paper_author{suffix}.paperID, authors{suffix}.name
+                       FROM paper_author{suffix} 
+                       JOIN authors{suffix} ON paper_author{suffix}.authorID=authors{suffix}.authorID 
+                       WHERE paper_author{suffix}.paperID IN ({paper_ids_str})
+                       ORDER BY paper_author{suffix}.paperID, paper_author{suffix}.authorOrder;""")
     result = cursor.fetchall()
 
     # 使用Python代码来组合结果
@@ -85,7 +88,7 @@ def extract_paper_venu(papers):
     conn, cursor = create_connection(database)
     _paperID2venue = {}
     for paperID in tqdm(papers):
-        cursor.execute(f"select ConferenceID, JournalID from papers_{suffix} where paperID='{paperID}'")
+        cursor.execute(f"select ConferenceID, JournalID from papers{suffix} where paperID='{paperID}'")
         result = cursor.fetchone()
         # print(result)
         venu = None
@@ -147,11 +150,17 @@ def extract_paper(file):
     core_papers = papers[papers['isKeyPaper'] > 0.5]
     core_citations = core_papers['citationCount'].to_list()
     core_citations.sort(reverse=True)
+
+    citations = papers['citationCount'].to_list()
+    citations.sort(reverse=True)
     return {
         'authorID': file.split('.')[0],
+        'hIndex': sum(1 for i, citation in enumerate(citations) if citation > i),
         'CorePaperCount': len(core_papers),
         'CoreCitationCount': core_papers['citationCount'].sum(),
-        'CorehIndex': sum(1 for i, citation in enumerate(core_citations) if citation > i)
+        'CorehIndex': sum(1 for i, citation in enumerate(core_citations) if citation > i),
+        'PaperCount': len(papers),
+        'CitationCount': papers['citationCount'].sum(),
     }
 
 os.makedirs(f'out/{field}/papers', exist_ok=True)
@@ -161,7 +170,7 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
 
 df = pd.DataFrame(results)
 # remove columns in top_authors if exist: ['CorePaperCount', 'CoreCitationCount', 'CorehIndex']
-for col in ['CorePaperCount', 'CoreCitationCount', 'CorehIndex']:
+for col in ['CorePaperCount', 'CoreCitationCount', 'CorehIndex', 'PaperCount', 'CitationCount']:
     if col in top_authors.columns:
         top_authors = top_authors.drop(columns=[col])
 top_authors = top_authors.merge(df, on='authorID')
