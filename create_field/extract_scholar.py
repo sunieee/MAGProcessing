@@ -16,6 +16,7 @@ import re
 
 # typ = 1 # ACMFellow: https://awards.acm.org/fellows/award-winners
 typ = 10 # A.M. Turing Award: https://amturing.acm.org/byyear.cfm
+field = 'fellow'
 
 # 连接数据库
 try:
@@ -51,13 +52,13 @@ def format_name(name):
 # 1. 读取网页获奖者名单
 name2year = {}
 if typ == 1:
-    with open('out/fellow.txt') as f:
+    with open(f'out/{field}/fellow.txt') as f:
         for line in f.read().strip().split('\n'):
             name = format_name(line.split('ACM Fellows')[0])
             year = int(line.split('ACM Fellows')[-1].strip().split()[0])
             name2year[name] = year
 elif typ == 10:
-    with open('out/turing.txt') as f:
+    with open(f'out/{field}/turing.txt') as f:
         lines = f.read().strip().split('\n')
     for i in range(0, len(lines)):
         line = lines[i].strip()
@@ -71,7 +72,7 @@ print('name2year:', name2year)
 
 ############################################################
 # 2. 读取数据集获奖者
-award_df = pd.read_csv('out/award_authors.csv')
+award_df = pd.read_csv(f'out/{field}/award_authors.csv')
 award_df = award_df[award_df['type'] == typ]
 award_df['MAGID'] = award_df['MAGID'].astype(str).apply(lambda x: x.split('.')[0])
 ids = award_df['MAGID'].unique()
@@ -94,6 +95,8 @@ for name in tqdm(name2year.keys()):
             # print(query)
             cur.execute(query)
             ret = cur.fetchall()
+            # choose top 3
+            ret = ret[:3]
             results.extend(ret)
             if len(ret) > 0:
                 valid_names.append(name)
@@ -151,7 +154,8 @@ def filter_group(group):
     # 否则返回空DataFrame
     return pd.DataFrame()
 
-df = df.groupby('name').apply(filter_group).reset_index(drop=True)
+# 暂时不用filter，取paperCount前三的作者
+# df = df.groupby('name').apply(filter_group).reset_index(drop=True)
 # df.sort_values(by=['name', 'PaperCount', 'CitationCount'], inplace=True, ascending=False)
 # df.drop_duplicates(subset=['name'], keep='first', inplace=True)
 
@@ -161,9 +165,9 @@ df['rank'] = df['rank'].astype(int)
 df['year'] = df['authorID'].apply(lambda x: id2year[x] if x in id2year else 0)
 
 if typ == 1:
-    df.to_csv('out/fellow.csv', index=False)
+    df.to_csv(f'out/{field}/fellow.csv', index=False)
 elif typ == 10:
-    df.to_csv('out/turing.csv', index=False)
+    df.to_csv(f'out/{field}/turing.csv', index=False)
 
 award_df = pd.DataFrame(columns=['original_author_name', 'year', 'type', 'MAGID', 'ARCID'])
 for row in df.iterrows():
@@ -171,18 +175,18 @@ for row in df.iterrows():
     if row['authorID'] not in ids:
         award_df.loc[len(award_df)] =[row['name'], row['year'], typ, row['authorID'], 'NULL']
 
-award_df.to_csv(f'out/award_authors_add{typ}.csv', index=False)
+award_df.to_csv(f'out/{field}/award_authors_add{typ}.csv', index=False)
 
 extract_candidate = False
 if extract_candidate:
-    fellow_df = pd.read_csv('out/fellow.csv')
+    fellow_df = pd.read_csv(f'out/{field}/fellow.csv')
 
     candidate_databases = [
         'scigene_database_field',
         'scigene_VCG_field'
         # 'scigene_AI_field'
     ]
-    candidates = pd.concat([pd.read_csv(f'../compute_prob/out/{database}/top_field_authors.csv') for database in candidate_databases])
+    candidates = pd.concat([pd.read_csv(f'../compute_prob/out/{field}/top_field_authors.csv') for database in candidate_databases])
     candidates.drop(columns=[col for col in candidates.columns if col.endswith('_field')], inplace=True)
 
 
@@ -206,7 +210,7 @@ if extract_candidate:
         non_fellow_df.append(nonfellow_candidates)
         
     non_fellow_df = pd.concat(non_fellow_df)
-    non_fellow_df.to_csv(f'out/non_fellow.csv', index=False)
+    non_fellow_df.to_csv(f'out/{field}/non_fellow.csv', index=False)
 
     fellow_df['fellow'] = True
     non_fellow_df['fellow'] = False
@@ -215,4 +219,4 @@ if extract_candidate:
     author_df['year'] = author_df['year'].astype(int)
     author_df['compareAuthorID'] = author_df['compareAuthorID'].astype(int)
 
-    author_df.to_csv('out/authors.csv', index=False) 
+    author_df.to_csv(f'out/{field}/authors.csv', index=False) 

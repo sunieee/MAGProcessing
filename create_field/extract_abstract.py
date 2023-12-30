@@ -11,25 +11,28 @@ from datetime import datetime
 import pandas as pd
 import re
 from collections import defaultdict
-from utils import *
+
+if os.environ.get('field').count('fellow'):
+    fellow = True
+    from utils_scholar import *
+else:
+    fellow = False
+    from utils import *
+
+    df_authors = pd.read_csv(f"out/{field}/csv/authors.csv")
+    df_authors['authorID'] = df_authors['authorID'].astype(str)
+    df_paper_author = pd.read_csv(f"out/{field}/csv/paper_author.csv")
+    df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
+    df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
+    df_papers = pd.read_csv(f"out/{field}/csv/papers.csv")
+    df_papers['paperID'] = df_papers['paperID'].astype(str)
 
 multiproces_num = 20
-
-# read authors table from sql
-# df_authors = pd.read_csv(f"out/csv/{field}/authors.csv")
-# df_authors['authorID'] = df_authors['authorID'].astype(str)
-conn, cursor = create_connection(database)
-df_authors = pd.read_csv(f"out/{field}/csv/authors.csv")
-df_paper_author = pd.read_csv(f"out/{field}/csv/paper_author.csv")
-df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
-df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
-df_papers = pd.read_csv(f"out/{field}/csv/papers.csv")
-df_papers['paperID'] = df_papers['paperID'].astype(str)
-
 print('load data finished', datetime.now().strftime("%H:%M:%S"))
-cnt = 1000000
+cnt = len(df_authors)
 min_size = 2
-while cnt > 300000:
+filtered_authors = df_authors
+while cnt > max(len(df_authors) * 0.1, 100000):
     min_size += 1
     filtered_authors = df_authors[df_authors['PaperCount_field'] >= min_size]
     cnt = len(filtered_authors)
@@ -61,16 +64,25 @@ authorID2h_index = author_h_index.to_dict()
 with open(f'out/{field}/authorID2h_index.json', 'w') as f:
     json.dump(authorID2h_index, f)
 
-for authorID, h_index in tqdm(authorID2h_index.items()):
-    cursor.execute(f"UPDATE authors_field SET hIndex_field = {h_index} WHERE authorID = '{authorID}'")
+df_authors['hIndex_field'] = df_authors['authorID'].apply(lambda authorID: authorID2h_index.get(authorID, 0))
+df_authors.to_csv(f'out/{field}/csv/authors.csv', index=False)
 
-conn.commit()
+
+if not fellow:
+    conn, cursor = create_connection(database)
+    for authorID, h_index in tqdm(authorID2h_index.items()):
+        cursor.execute(f"UPDATE authors_field SET hIndex_field = {h_index} WHERE authorID = '{authorID}'")
+    conn.commit()
 
 ###################################################################
 # 创建topAuthor
-papers_top, _, _, df_paper_author_filtered, _ = create_top()
-paperIDs = set(df_paper_author_filtered['paperID'].drop_duplicates().tolist())
+if fellow:
+    df_paper_author_filtered = df_paper_author[df_paper_author['authorID'].isin(authorIDs)]
+else:
+    _, _, _, df_paper_author_filtered, _ = create_top()
+    
 
+paperIDs = set(df_paper_author_filtered['paperID'].drop_duplicates().tolist())
 papers_top = pd.read_csv(f'out/{field}/csv/papers.csv')
 papers_top['paperID'] = papers_top['paperID'].astype(str)
 papers_top = papers_top[papers_top['paperID'].isin(paperIDs)]
@@ -123,4 +135,4 @@ else:
         json.dump(paperID2abstract, f)
 
 papers_top['abstract'] = papers_top['paperID'].apply(lambda x: paperID2abstract.get(x, ''))
-papers_top.to_csv(f'out/{field}/papers_top.csv')
+papers_top.to_csv(f'out/{field}/papers_top.csv', index=False)

@@ -31,25 +31,31 @@ def merge_database(name, upload=True):
     df = []
     print(f'## uploading {name}', datetime.now().strftime('%H:%M:%S'))
     for folder in tqdm(folders):
-        df.append(pd.read_csv(f'out/{folder}/csv/{name}.csv'))
+        t = pd.read_csv(f'out/{folder}/csv/{name}.csv')
+        # 删除所有 'Unnamed' 开头的列
+        t = t.loc[:, ~t.columns.str.contains('^Unnamed')]
+        df.append(t)
     
     df = pd.concat(df)
     print('dropping duplicates', df.head(), df.shape, datetime.now().strftime('%H:%M:%S'))
     df.drop_duplicates(inplace=True)
-    df.to_csv(f'out/{field}/csv/{name}.csv')
+    df.to_csv(f'out/{field}/csv/{name}.csv', index=False)
 
     if upload:
         print('uploading to sql', df.head(), df.shape, datetime.now().strftime('%H:%M:%S'))
         df.to_sql(f'{name}_field',con=engine,if_exists='replace',dtype=dtype_dic[name])
     return df
 
-# df_papers = merge_database('papers')
-# df_paper_author = merge_database('paper_author')
-# df_authors = merge_database('authors', False)
+df_papers = merge_database('papers')
+df_paper_author = merge_database('paper_author')
+df_authors = merge_database('authors', False)
 
 df_papers = pd.read_csv(f'out/{field}/csv/papers.csv')
 df_paper_author = pd.read_csv(f'out/{field}/csv/paper_author.csv')
 df_authors = pd.read_csv(f'out/{field}/csv/authors.csv')
+
+df_authors = df_authors[df_authors.columns.drop(list(df_authors.filter(regex='^PaperCount_field')))]
+df_authors = df_authors[df_authors.columns.drop(list(df_authors.filter(regex='^CitationCount_field')))]
 
 df_papers['paperID'] = df_papers['paperID'].astype(str)
 df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
@@ -64,16 +70,21 @@ df_authors['authorID'] = df_authors['authorID'].astype(str)
 #######################################################################
 print("## Step 1: Calculate Paper Count", datetime.now().strftime('%H:%M:%S'))
 paper_count = df_paper_author.groupby('authorID')['paperID'].count().reset_index(name='PaperCount_field')
+print('paper_count:', paper_count.head(), paper_count.shape)
 
 print("## Step 2: Calculate Total Citations", datetime.now().strftime('%H:%M:%S'))
 df_papers.rename(columns={'citationCount':'CitationCount'}, inplace=True)
+df_papers = df_papers[['paperID', 'CitationCount']]
+df_papers = df_papers[df_papers['CitationCount'] >= 0]
 total_citations = df_paper_author.merge(df_papers, on='paperID')
-total_citations = total_citations[total_citations['CitationCount'] >= 0]
 total_citations = total_citations.groupby('authorID')['CitationCount'].sum().reset_index(name='CitationCount_field')
+print('total_citations:', total_citations.head(), total_citations.shape)
 
 print("## Step 3: Merge Calculations with df_authors", datetime.now().strftime('%H:%M:%S'))
 df_authors = df_authors.merge(paper_count, on='authorID', how='left')
 df_authors = df_authors.merge(total_citations, on='authorID', how='left')
+
+df_authors.to_csv(f'out/{field}/csv/authors.csv',index=False)
 
 df_authors['PaperCount_field'] = df_authors['PaperCount_field'].fillna(0)
 df_authors['CitationCount_field'] = df_authors['CitationCount_field'].fillna(0)
@@ -92,10 +103,12 @@ alter table paper_author_field add index(authorID);
 alter table paper_author_field add index(authorOrder);
 alter table authors_field add index(authorID);
 alter table authors_field add index(name);
-alter table paper_reference_field add index(citingpaperID);
-alter table paper_reference_field add index(citedpaperID);
-ALTER TABLE paper_reference_field ADD CONSTRAINT paper_reference_field_pk PRIMARY KEY (citingpaperID,citedpaperID);
 ''')
        
 
 merge_database('paper_reference')
+
+execute('''alter table paper_reference_field add index(citingpaperID);
+alter table paper_reference_field add index(citedpaperID);
+ALTER TABLE paper_reference_field ADD CONSTRAINT paper_reference_field_pk PRIMARY KEY (citingpaperID,citedpaperID);
+''')

@@ -185,11 +185,23 @@ def test():
 # 获取第3000人的hIndex0，并得到所有hIndex >= hIndex0的人
 # num = max(int(topN * 0.5), 3000)
 num = 5000
-cursor.execute(f'select hIndex_field from authors_field order by hIndex_field desc limit 1 offset {num}')
-hIndex0 = cursor.fetchone()[0]
+# cursor.execute(f'select hIndex_field from authors_field order by hIndex_field desc limit 1 offset {num}')
+# hIndex0 = cursor.fetchone()[0]
+# print('MIN hIndex:', hIndex0)
+# assert hIndex0 > 0
+# df = pd.read_sql_query(f'select * from authors_field where hIndex_field >= {hIndex0}', engine)
+
+# 读取 CSV 文件
+df = pd.read_csv(f'out/{field}/csv/authors.csv')
+df = df.sort_values(by='hIndex_field', ascending=False).reset_index(drop=True)
+# 获取特定位置（假设为变量 'num'）的 hIndex_field 值
+hIndex0 = df.loc[num, 'hIndex_field']
 print('MIN hIndex:', hIndex0)
 assert hIndex0 > 0
-df = pd.read_sql_query(f'select * from authors_field where hIndex_field >= {hIndex0}', engine)
+# 筛选出 hIndex_field 大于等于 hIndex0 的行
+df = df[df['hIndex_field'] >= hIndex0]
+# 将 'authorID' 列的数据类型转换为字符串
+df['authorID'] = df['authorID'].astype('str')
 
 print(df.shape)
 print(df.head())

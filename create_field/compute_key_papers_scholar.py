@@ -7,8 +7,10 @@ import math
 import json
 from tqdm import tqdm
 import multiprocessing
-from utils import *
+from utils_scholar import *
 
+
+paperID2year = df_papers.set_index('paperID')['year'].to_dict()
 
 authorID2yearCountMap = {}
 coAuthorID2yearCountMap = {}
@@ -27,8 +29,10 @@ def getAuthorYearCountMap(authorID, conn):
         if len(paperID_list):
             paperID_str = ','.join([f'\'{x}\'' for x in paperID_list])
             papers = pd.read_sql_query(f"select paperID, PublicationDate from papers where paperID in ({paperID_str})", conn)
-            papers['PublicationDate'] = papers['PublicationDate'].astype(datetime.datetime)
-            paperID2year.update(dict(zip(papers['paperID'].tolist(), papers['PublicationDate'].apply(lambda x: x.year).tolist())))
+            papers['PublicationDate'] = pd.to_datetime(papers['PublicationDate'], errors='coerce')
+            for paper_id, publication_date in zip(papers['paperID'], papers['PublicationDate']):
+                if paper_id not in paperID2year:
+                    paperID2year[paper_id] = publication_date.year if pd.notna(publication_date) else 0
     else:
         df = df_paper_author[df_paper_author['authorID'] == authorID]
     #
@@ -70,11 +74,11 @@ MIN_SUPERVISED_YEAR_SPAN = 2
 MIN_SUPERVISED_PAPER_SPAN = 2.1
 MAX_SUPERVISED_YEAR = 6
 HALF_SUPERVISED_YEAR = 3
-MAX_YEAR = 1000
+MAX_YEAR = 10000
 
 MAX_SUPERVISED_PAPER = 10
 HALF_SUPERVISED_PAPER = 5
-MAX_PAPER = 1000
+MAX_PAPER = 10000
 
 MAX_ACADEMIC_YEAR = int(
     MAX_SUPERVISED_YEAR
@@ -115,7 +119,9 @@ def compute_count_list(academic_year_list, paper_count_map, start_list=None):
         assert len(count_list) == i
         count = paper_count_map.get(academic_year_list[i - 1], 0)
         if start_list:
-            count *= min(SUPERVISED_YEAR_MODIFIER[i - 1], SUPERVISED_PAPER_MODIFIER[int(start_list[i - 1])])
+            count *= min(SUPERVISED_YEAR_MODIFIER[i - 1], 
+                         SUPERVISED_PAPER_MODIFIER[
+                             int(start_list[i - 1])])
         count_list.append(count_list[-1] + count)
     return count_list
 
@@ -198,7 +204,7 @@ def compute_supervisor_rate(studentID, supervisorID, year, conn):
     return maxSupervisedRate * supervisingRate
 
 
-print('# start to process each author (key paper)', len(authorID_list), datetime.datetime.now().strftime("%H:%M:%S"))
+print('# start to process each author (key paper)', len(authorID_list), datetime.now().strftime("%H:%M:%S"))
 multiprocess_num = multiprocessing.cpu_count()
 
 def toStr(s):
@@ -208,6 +214,8 @@ def toStr(s):
 
 
 def build_top_author(authorID):
+    if os.path.exists(f'out/{field}/papers_raw/{authorID}.csv'):
+        return
     print('## ' + authorID)
     conn, cursor = create_connection()
 
@@ -239,14 +247,14 @@ def build_top_author(authorID):
         df.at[i, 'isKeyPaper'] = isKeyPaper
         print(row['paperID'], isKeyPaper)
 
-    df.to_csv(f'out/papers_raw/{authorID}.csv', index=False)
+    df.to_csv(f'out/{field}/papers_raw/{authorID}.csv', index=False)
     cursor.close()
     conn.close()
 
 
-os.makedirs('out/papers_raw', exist_ok=True)
+os.makedirs(f'out/{field}/papers_raw', exist_ok=True)
 with multiprocessing.Pool(processes=multiprocess_num) as pool:
-    results = pool.map(build_top_author, authorID_list)
+    pool.map(build_top_author, authorID_list)
 
 
 with open(f'{path}/authorID2yearCountMap.json', 'w') as f:

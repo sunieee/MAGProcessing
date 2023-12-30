@@ -1,12 +1,14 @@
 import time
-from utils import *
 import math
 import multiprocessing
 from tqdm import tqdm
 import json
+import os
+import pandas as pd
 
-if os.environ.get('field') in ['fellow']:
+if os.environ.get('field').count('fellow'):
     from utils_scholar import *
+    df_paper_author_filtered = df_paper_author
 else:
     from utils import *
     df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors = create_top()

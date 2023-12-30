@@ -102,31 +102,25 @@ class NumpyEncoder(json.JSONEncoder):
     
 
 def create_top():
-    suffix = 'ARC' if field.count("acl") else 'field'
-    cursor.execute(f'select hIndex_{suffix} from authors_{suffix} order by hIndex_{suffix} desc limit 1 offset {topN}')
-    hIndex0 = cursor.fetchone()[0]
-    print('MIN hIndex:', hIndex0)
+    path_to_mapping = f"out/{field}/csv"
+    df_authors = pd.read_csv(f"{path_to_mapping}/authors.csv")
+    df_authors['authorID'] = df_authors['authorID'].astype(str)
+    df_authors = df_authors.sort_values(by='hIndex_field', ascending=False).reset_index(drop=True)
+    # 获取特定位置（假设为变量 'num'）的 hIndex_field 值
+    hIndex0 = df_authors.loc[topN, 'hIndex_field']
     assert hIndex0 > 5
-    filterCondition = f'hIndex_{suffix} >= {hIndex0}'
-
     top_authors_path = f'out/{field}/top_authors.csv'
-    top_authors = pd.read_sql(f"""select * from authors_{suffix} where {filterCondition}""", conn)
+    top_authors = df_authors[df_authors['hIndex_field'] >= hIndex0]
     top_authors.to_csv(top_authors_path, index=False)
-
-    top_authors['authorID'] = top_authors['authorID'].astype(str)
     authorIDs = set(top_authors['authorID'].tolist())
 
-    print('loading data from database', datetime.now().strftime("%H:%M:%S"))
-    path_to_mapping = f"out/{field}/csv"
-    
+    print('loading data from dataset', datetime.now().strftime("%H:%M:%S"))
     df_paper_author = pd.read_csv(f"{path_to_mapping}/paper_author.csv")
     df_papers = pd.read_csv(f"{path_to_mapping}/papers.csv")
-    df_authors = pd.read_csv(f"{path_to_mapping}/authors.csv")
     
     df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
     df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
     df_papers['paperID'] = df_papers['paperID'].astype(str)
-    df_authors['authorID'] = df_authors['authorID'].astype(str)
     
     df_papers['PublicationDate'] = pd.to_datetime(df_papers['PublicationDate'])
     df_papers['year'] = df_papers['PublicationDate'].apply(lambda x: x.year)

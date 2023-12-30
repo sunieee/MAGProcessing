@@ -1,8 +1,13 @@
 import pandas as pd
-from utils import field, execute, cursor, conn
-from tqdm import tqdm
+import os
+
+# 读取 CSV 文件
+field = os.environ.get('field')
 
 match_df = pd.read_csv(f'out/{field}/match_modify.csv')
+df_paper_author = pd.read_csv(f'out/{field}/csv/paper_author.csv')
+df_authors = pd.read_csv(f'out/{field}/csv/authors.csv')
+df_papers = pd.read_csv(f'out/{field}/csv/papers.csv')
 
 ################################################################
 # 从后往前merge，只会删除后面的。这样在多个相同name情况下也能正常融合
@@ -12,6 +17,8 @@ match_df = pd.read_csv(f'out/{field}/match_modify.csv')
 # 3. authors_field: 重新刷新一下统计信息：#paper, #citation, hIndex
 #   使用UPDATE JOIN语句将id2的值加到id1上，删除id2的记录
 ################################################################
+
+# 更新 paper_author.csv
 authorIDs = set()
 for i in list(match_df.index)[::-1]:
     id1 = match_df.loc[i]['id1']
@@ -20,75 +27,36 @@ for i in list(match_df.index)[::-1]:
     name2 = match_df.loc[i]['name2']
     print('=' * 20)
     print(f'merging authors: {name2}({id2}) -> {name1}({id1})')
-
-    execute(f"""UPDATE paper_author_field
-SET authorID = '{id1}'
-WHERE authorID = '{id2}';
-""")
-
-    execute(f"DELETE FROM authors_field WHERE authorID = '{id2}';")
+    # 更新 authorID
+    df_paper_author.loc[df_paper_author['authorID'] == id2, 'authorID'] = id1
+    # 删除 df_authors 中的相关行
+    df_authors = df_authors[df_authors['authorID'] != id2]
     authorIDs.add(id1)
+    
 
 authorIDs_str = ', '.join([f"'{x}'" for x in authorIDs])
 repeatCondition = f"authorID IN ({authorIDs_str})"
 
-#######################################################################
-# update authors_field (局部更新用户信息)
-# 计算并添加作者在领域内的论文数量及排名，更新作者的引用总数信息
-#######################################################################
-print('updating authors_field')
-try:
-    execute("drop table authors_field_tmp")
-except:
-    pass
+# 更新 authors.csv
+# 更新 PaperCount_field
+paper_count = df_paper_author[df_paper_author['authorID'].isin(authorIDs)].groupby('authorID').size()
+df_authors.set_index('authorID', inplace=True)
+df_authors.loc[paper_count.index, 'PaperCount_field'] = paper_count.values
+df_authors.reset_index(inplace=True)
 
-execute(f'''
-UPDATE authors_field af
-JOIN (
-    SELECT authorID, COUNT(*) as count_papers
-    FROM paper_author_field 
-    WHERE {repeatCondition}
-    GROUP BY authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.PaperCount_field = tmp.count_papers;
+# 更新 CitationCount_field 和 hIndex_field
+for authorID in authorIDs:
+    # 这里假设你有一个单独的 papers_field DataFrame
+    author_papers = df_paper_author[df_paper_author['authorID'] == authorID]
+    citations = df_papers[df_papers['paperID'].isin(author_papers['paperID'])]['citationCount']
+    total_citations = citations.sum()
+    df_authors.loc[df_authors['authorID'] == authorID, 'CitationCount_field'] = total_citations
 
-UPDATE authors_field af
-JOIN (
-    SELECT PA.authorID, SUM(P.citationCount) as total_citations
-    FROM papers_field as P 
-    JOIN paper_author_field as PA on P.paperID = PA.paperID 
-    WHERE P.CitationCount >= 0 AND PA.{repeatCondition}
-    GROUP BY PA.authorID
-) tmp ON af.authorID = tmp.authorID
-SET af.CitationCount_field = tmp.total_citations;
-''')
+    # 创建 citations 的副本并进行排序
+    sorted_citations = citations.copy().sort_values(ascending=False)
+    hIndex_field = sum(1 for i, citation in enumerate(sorted_citations) if citation > i)
+    df_authors.loc[df_authors['authorID'] == authorID, 'hIndex_field'] = hIndex_field
 
-
-#######################################################################
-# calculate hIndex （对于合并后的作者计算）
-# 通过计算每位作者的引用次数数据，根据 h-index 的定义，计算并更新了每位作者在特定领域内的 h-index 值
-# 以反映其影响力和论文引用分布情况。
-#######################################################################
-for authorID in tqdm(authorIDs):
-    cursor.execute(f"""select P.CitationCount from papers_field as P 
-                   join paper_author_field as PA 
-                   on PA.authorID = '{authorID}' and P.paperID = PA.paperID;""")
-    rows = cursor.fetchall()
-    citations = [int(citation_row[0]) for citation_row in rows]
-    citations.sort(reverse=True)
-    hIndex_field = sum(1 for i, citation in enumerate(citations) if citation > i)
-
-    cursor.execute(f"update authors_field set hIndex_field = {hIndex_field} where authorID = '{authorID}'")
-    conn.commit()
-    # print("Process author: ", authorName, " with rank ", str(authorRank))
-
-
-df_paper_author = pd.read_sql_query(f"""select * from paper_author_field""", conn)
+# 将更新后的 DataFrame 写回 CSV 文件
 df_paper_author.to_csv(f'out/{field}/csv/paper_author.csv', index=False)
-
-df_authors = pd.read_sql_query(f"""select * from authors_field""", conn)
 df_authors.to_csv(f'out/{field}/csv/authors.csv', index=False)
-
-
-cursor.close()
-conn.close()

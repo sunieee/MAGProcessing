@@ -1,6 +1,6 @@
 import pandas as pd
 import pymysql
-import datetime
+from datetime import datetime
 import os
 
 
@@ -12,17 +12,18 @@ def create_connection():
                             charset='utf8')
     return conn, conn.cursor()
 
+field = os.environ.get('field')
 
 conn, cursor = create_connection()
-df_authors = pd.read_csv('out/authors.csv')
+df_authors = pd.read_csv(f'out/{field}/authors.csv')
 df_authors['authorID'] = df_authors['authorID'].astype(str)
-df_authors['compareAuthorID'] = df_authors['compareAuthorID'].astype(str)
 
 authorID_list = set(df_authors['authorID'].tolist())
+authorIDs = authorID_list
 authorID_str = ','.join([f'\'{x}\'' for x in authorID_list])
 
-print('loading data from database', datetime.datetime.now().strftime("%H:%M:%S"))
-path = f"out/csv"
+print('loading data from database', datetime.now().strftime("%H:%M:%S"))
+path = f'out/{field}/csv'
 if not os.path.exists(path):
     os.makedirs(path)
     df_paper_author = pd.read_sql_query(f"select * from paper_author where authorID in ({authorID_str})", conn)
@@ -47,5 +48,12 @@ else:
     df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
     df_papers['paperID'] = df_papers['paperID'].astype(str)
 
+if 'PaperCount_field' not in df_authors.columns:
+    paper_count = df_paper_author.groupby('authorID')['paperID'].count().reset_index(name='PaperCount_field')
+    df_authors = df_authors.merge(paper_count, on='authorID', how='left')
+    df_authors['PaperCount_field'] = df_authors['PaperCount_field'].fillna(0)
+    df_authors.to_csv(f'out/{field}/authors.csv',index=False)
+
 df_papers['PublicationDate'] = pd.to_datetime(df_papers['PublicationDate'])
-df_authors = None
+df_papers['year'] = df_papers['PublicationDate'].dt.year
+

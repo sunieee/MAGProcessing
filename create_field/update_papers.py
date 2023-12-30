@@ -7,7 +7,7 @@ from tqdm import tqdm
 import multiprocessing
 from collections import defaultdict
 import math
-import datetime
+from datetime import datetime
 import json
 import re
 
@@ -15,7 +15,7 @@ import re
 field = os.environ.get('field')
 suffix = '_ARC' if field.count("acl_anthology") else '_field'
 database = f'scigene_{field}_field'
-if field in ['fellow']:
+if field.count('fellow'):
     suffix = ''
     database = 'MACG'
 
@@ -34,7 +34,11 @@ df_papers = pd.read_csv(f'out/{field}/csv/papers.csv')
 df_papers['paperID'] = df_papers['paperID'].astype(str)
 if 'referenceCount' not in df_papers.columns:
     df_papers['referenceCount'] = -1
-top_authors = pd.read_csv(f'out/{field}/top_authors.csv')
+
+if os.path.exists(f'out/{field}/top_authors.csv'):
+    top_authors = pd.read_csv(f'out/{field}/top_authors.csv')
+else:
+    top_authors = pd.read_csv(f'out/{field}/authors.csv')
 top_authors['authorID'] = top_authors['authorID'].astype(str)
 
 authorID_list = top_authors['authorID'].tolist()
@@ -117,14 +121,14 @@ for file in tqdm(file_list):
     papers['paperID'] = papers['paperID'].astype(str)
     paperID_list += papers["paperID"].values.tolist()
 paperID_list = list(set(paperID_list))
-print('len(paperID_list)', len(paperID_list), datetime.datetime.now().strftime('%H:%M:%S'))
+print('len(paperID_list)', len(paperID_list), datetime.now().strftime('%H:%M:%S'))
 
 multiproces_num = 20
 with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_venu, [paperID_list[i::multiproces_num] for i in range(multiproces_num)])
     for result in results:
         paperID2venue.update(result)
-print('finish extract_paper_venu', len(paperID2venue), datetime.datetime.now().strftime('%H:%M:%S'))
+print('finish extract_paper_venu', len(paperID2venue), datetime.now().strftime('%H:%M:%S'))
 
 group_size = 2000
 group_length = math.ceil(len(paperID_list)/group_size)
@@ -132,12 +136,14 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
     results = pool.map(extract_paper_authors, [(paperID_list[i*group_size:i*group_size+group_size], f'{i}/{group_length}') for i in range(group_length)])
     for result in results:
         paperID2authorsName.update(result)
-print('finish extract_paper_authors', len(paperID2authorsName), datetime.datetime.now().strftime('%H:%M:%S'))
+print('finish extract_paper_authors', len(paperID2authorsName), datetime.now().strftime('%H:%M:%S'))
 
 def extract_paper(file):
     filepath = os.path.join(paper_dir, file)
     papers = pd.read_csv(filepath)
-    papers = papers.drop(columns=["authorOrder", "firstAuthorID", "firstAuthorName"])
+    for col in ["authorOrder", "firstAuthorID", "firstAuthorName"]:
+        if col in papers.columns:
+            papers = papers.drop(columns=[col])
     papers['paperID'] = papers['paperID'].astype(str)
     papers['referenceCount'] = papers['paperID'].apply(lambda paperID: paperID2referenceCount[paperID])
     papers['citationCount'] = papers['paperID'].apply(lambda paperID: paperID2citationCount[paperID])
@@ -170,7 +176,8 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
 
 df = pd.DataFrame(results)
 # remove columns in top_authors if exist: ['CorePaperCount', 'CoreCitationCount', 'CorehIndex']
-for col in ['CorePaperCount', 'CoreCitationCount', 'CorehIndex', 'PaperCount', 'CitationCount']:
+cols = ['CorePaperCount', 'CoreCitationCount', 'CorehIndex', 'PaperCount', 'CitationCount']
+for col in cols + [x + '_field' for x in cols]:
     if col in top_authors.columns:
         top_authors = top_authors.drop(columns=[col])
 top_authors = top_authors.merge(df, on='authorID')
