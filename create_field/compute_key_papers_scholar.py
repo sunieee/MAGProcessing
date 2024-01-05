@@ -8,7 +8,7 @@ import json
 from tqdm import tqdm
 import multiprocessing
 from utils_scholar import *
-
+import numpy as np
 
 paperID2year = df_papers.set_index('paperID')['year'].to_dict()
 
@@ -228,10 +228,13 @@ def build_top_author(authorID):
 
     # Get the first author ID for each paper
     paperID_list = df['paperID'].tolist()
-    paperID_str = ','.join([f'\'{x}\'' for x in paperID_list])
-    cursor.execute(f"select paperID, authorID from paper_author where authorOrder = 1 and paperID in ({paperID_str})")
-    paperID2FirstAuthorID = dict(cursor.fetchall())
-    df['firstAuthorID'] = df['paperID'].map(paperID2FirstAuthorID)
+    if paperID_list:
+        paperID_str = ','.join([f'\'{x}\'' for x in paperID_list])
+        cursor.execute(f"select paperID, authorID from paper_author where authorOrder = 1 and paperID in ({paperID_str})")
+        paperID2FirstAuthorID = dict(cursor.fetchall())
+        df['firstAuthorID'] = df['paperID'].map(paperID2FirstAuthorID)
+    else:
+        df['firstAuthorID'] = np.nan
 
     # Process the DataFrame
     for i, row in df.iterrows():

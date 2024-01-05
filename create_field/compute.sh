@@ -18,6 +18,7 @@ compute() {
     mkdir -p out/$field/{papers_raw,papers,links}
     
     # # compute node
+    python create_mappings.py
     python compute_key_papers.py | tee out/$field/log/compute_key_papers.log
     python update_papers.py | tee out/$field/log/update_papers.log
 
@@ -49,3 +50,6 @@ compute AI
 # rsync -a --progress=info2 out/HCI/{links,papers,top_field_authors.csv} root@82.156.152.182:/home/xfl/pyCode/GFVisTest/csv/HCI/
 # rsync -a --progress=info2 out/CN/{links,papers,top_field_authors.csv} root@82.156.152.182:/home/xfl/pyCode/GFVisTest/csv/CN/
 # rsync -a --progress=info2 out/ACMfellowTuring/{links,papers,top_field_authors.csv} root@82.156.152.182:/home/xfl/pyCode/GFVisTest/csv/ACMfellowTuring/
+# rsync -a --progress=info2 out/VCG/{links,papers,top_field_authors.csv} root@82.156.152.182:/home/xfl/pyCode/GFVisTest/csv/VCG/
+
+rsync -a --progress=info2 root@82.156.152.182:/home/xfl/pyCode/GFVisTest/csv/AI/{links,papers,top_field_authors.csv} out/AI/

@@ -30,12 +30,12 @@ else:
 multiproces_num = 20
 print('load data finished', datetime.now().strftime("%H:%M:%S"))
 cnt = len(df_authors)
-min_size = 2
-filtered_authors = df_authors
-while cnt > max(len(df_authors) * 0.1, 100000):
-    min_size += 1
-    filtered_authors = df_authors[df_authors['PaperCount_field'] >= min_size]
-    cnt = len(filtered_authors)
+min_size = 3
+# filtered_authors = df_authors
+# while cnt > max(len(df_authors) * 0.1, 100000):
+#     min_size += 1
+filtered_authors = df_authors[df_authors['PaperCount_field'] >= min_size]
+cnt = len(filtered_authors)
 
 print('min_size:', min_size, 'cnt:', cnt)
 authorIDs = set(filtered_authors['authorID'].tolist())

@@ -104,14 +104,18 @@ class NumpyEncoder(json.JSONEncoder):
 def create_top():
     path_to_mapping = f"out/{field}/csv"
     df_authors = pd.read_csv(f"{path_to_mapping}/authors.csv")
-    df_authors['authorID'] = df_authors['authorID'].astype(str)
-    df_authors = df_authors.sort_values(by='hIndex_field', ascending=False).reset_index(drop=True)
-    # 获取特定位置（假设为变量 'num'）的 hIndex_field 值
-    hIndex0 = df_authors.loc[topN, 'hIndex_field']
-    assert hIndex0 > 5
     top_authors_path = f'out/{field}/top_authors.csv'
-    top_authors = df_authors[df_authors['hIndex_field'] >= hIndex0]
-    top_authors.to_csv(top_authors_path, index=False)
+    if not os.path.exists(top_authors_path):
+        df_authors['authorID'] = df_authors['authorID'].astype(str)
+        df_authors = df_authors.sort_values(by='hIndex_field', ascending=False).reset_index(drop=True)
+        # 获取特定位置（假设为变量 'num'）的 hIndex_field 值
+        hIndex0 = df_authors.loc[topN, 'hIndex_field']
+        assert hIndex0 > 5
+        top_authors = df_authors[df_authors['hIndex_field'] >= hIndex0]
+        top_authors.to_csv(top_authors_path, index=False)
+    else:
+        top_authors = pd.read_csv(top_authors_path)
+        top_authors['authorID'] = top_authors['authorID'].astype(str)
     authorIDs = set(top_authors['authorID'].tolist())
 
     print('loading data from dataset', datetime.now().strftime("%H:%M:%S"))
@@ -127,5 +131,18 @@ def create_top():
         
     df_paper_author_filtered = df_paper_author[df_paper_author['authorID'].isin(authorIDs)]
     df_paper_author_filtered = df_paper_author_filtered[['authorID', 'paperID', 'authorOrder']].drop_duplicates()
+
+    if not os.path.exists(f'out/{field}/df_paper_author_filtered.csv'):
+        df_paper_author_filtered.to_csv(f'out/{field}/df_paper_author_filtered.csv', index=False)
+
+    if not os.path.exists(f'out/{field}/authorID2name.json'):
+        authorID2name = df_authors.set_index('authorID')['name'].to_dict()
+        with open(f'out/{field}/authorID2name.json', 'w') as f:
+            json.dump(authorID2name, f)
+        
+    if not os.path.exists(f'out/{field}/paperID2FirstAuthorID.json'):
+        paperID2FirstAuthorID = df_paper_author[df_paper_author['authorOrder'] == 1].set_index('paperID')['authorID'].to_dict()
+        with open(f'out/{field}/paperID2FirstAuthorID.json', 'w') as f:
+            json.dump(paperID2FirstAuthorID, f)
 
     return df_papers, df_authors, df_paper_author, df_paper_author_filtered, top_authors

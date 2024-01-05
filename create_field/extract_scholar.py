@@ -50,13 +50,13 @@ def format_name(name):
 
 #####################################################3
 # 1. 读取网页获奖者名单
-name2year = {}
+original2year = {}
 if typ == 1:
     with open(f'out/{field}/fellow.txt') as f:
         for line in f.read().strip().split('\n'):
             name = format_name(line.split('ACM Fellows')[0])
             year = int(line.split('ACM Fellows')[-1].strip().split()[0])
-            name2year[name] = year
+            original2year[name] = year
 elif typ == 10:
     with open(f'out/{field}/turing.txt') as f:
         lines = f.read().strip().split('\n')
@@ -66,9 +66,9 @@ elif typ == 10:
             year = int(line.strip("()"))  # Extracting the year
         else:
             name = format_name(line)
-            name2year[name] = year
+            original2year[name] = year
 
-print('name2year:', name2year)
+print('original2year:', original2year)
 
 ############################################################
 # 2. 读取数据集获奖者
@@ -81,28 +81,45 @@ print('valid MAGID in award_authors.csv', len(ids))
 
 ###########################################################
 # 3. （使用网页数据）查询并选出PaperCount最高的3个且大于10的ACM Fellows
+
+def remove_middle_name(name):
+    parts = name.split()
+    if len(parts) == 2:
+        return name
+    return parts[0] + ' ' + parts[-1]
+
+def short2_name(name):
+    parts = name.split()
+    return parts[0][:2] + ' ' + parts[-1]
+
+def short3_name(name):
+    parts = name.split()
+    return parts[0][:3] + ' ' + parts[-1]
+
 id2year = {}
+id2original = {}
 results = []
 valid_names = []
-for name in tqdm(name2year.keys()):
+for name in tqdm(original2year.keys()):
     try:
         with conn.cursor() as cur:
             query = f"""
                 SELECT * FROM MACG.authors
-                WHERE name="{name}" AND PaperCount >= 20 AND CitationCount >= 500
-                ORDER BY PaperCount DESC;
+                WHERE name in ("{name}", "{remove_middle_name(name)}", "{short2_name(name)}", "{short3_name(name)}") AND CitationCount >= 200
+                ORDER BY CitationCount;
             """
             # print(query)
             cur.execute(query)
             ret = cur.fetchall()
             # choose top 3
-            ret = ret[:3]
+            ret = ret[:5]
             results.extend(ret)
             if len(ret) > 0:
                 valid_names.append(name)
 
             for row in ret:
-                id2year[str(row[0])] = name2year[name]
+                id2year[str(row[0])] = original2year[name]
+                id2original[str(row[0])] = name
     except pymysql.MySQLError as e:
         print(f"Error querying database for {name}")
         print(e)
@@ -135,6 +152,7 @@ conn.close()
 # 5. 创建DataFrame并显示结果
 df = pd.DataFrame(results, columns=['authorID', 'rank', 'name', 'PaperCount', 'CitationCount'])
 df['authorID'] = df['authorID'].astype(str)
+df['original'] = df['authorID'].apply(lambda x: id2original.get(x, ''))
 df.sort_values(by=['name'], inplace=True, ascending=True)
 
 for name in name2id.keys():
@@ -176,6 +194,11 @@ for row in df.iterrows():
         award_df.loc[len(award_df)] =[row['name'], row['year'], typ, row['authorID'], 'NULL']
 
 award_df.to_csv(f'out/{field}/award_authors_add{typ}.csv', index=False)
+
+# save not found name: year
+original2year = {k: v for k, v in original2year.items() if k not in valid_names}
+with open(f'out/{field}/not_found_name{typ}.json', 'w') as f:
+    json.dump(original2year, f)
 
 extract_candidate = False
 if extract_candidate:

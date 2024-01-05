@@ -176,7 +176,7 @@ with multiprocessing.Pool(processes=multiproces_num) as pool:
 
 df = pd.DataFrame(results)
 # remove columns in top_authors if exist: ['CorePaperCount', 'CoreCitationCount', 'CorehIndex']
-cols = ['CorePaperCount', 'CoreCitationCount', 'CorehIndex', 'PaperCount', 'CitationCount']
+cols = ['CorePaperCount', 'CoreCitationCount', 'CorehIndex', 'PaperCount', 'CitationCount', 'hIndex']
 for col in cols + [x + '_field' for x in cols]:
     if col in top_authors.columns:
         top_authors = top_authors.drop(columns=[col])
