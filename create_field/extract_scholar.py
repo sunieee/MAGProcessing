@@ -14,20 +14,19 @@ from tqdm import tqdm
 import json
 import re
 
-# typ = 1 # ACMFellow: https://awards.acm.org/fellows/award-winners
-typ = 10 # A.M. Turing Award: https://amturing.acm.org/byyear.cfm
+typ = 1 # ACMFellow: https://awards.acm.org/fellows/award-winners
+# typ = 10 # A.M. Turing Award: https://amturing.acm.org/byyear.cfm
 field = 'fellow'
 
 # 连接数据库
-try:
+def create_connection(database='MACG'):
     conn = pymysql.connect(host='localhost',
                             user='root',
                             password='root',
-                            db='MACG',
+                            db=database,
                             charset='utf8')
-except pymysql.MySQLError as e:
-    print("Error: Unable to connect to the database")
-    print(e)
+    cur = conn.cursor()
+    return conn, cur
 
 
 def format_name(name):
@@ -98,31 +97,69 @@ def short3_name(name):
 
 id2year = {}
 id2original = {}
-results = []
-valid_names = []
-for name in tqdm(original2year.keys()):
-    try:
-        with conn.cursor() as cur:
+
+def query(names):
+    conn, cur = create_connection()
+    name2ret = {}
+    for name in tqdm(names):
+        query = f"""
+            SELECT * FROM MACG.authors
+            WHERE name in ("{name}", "{remove_middle_name(name)}", "{short2_name(name)}", "{short3_name(name)}") 
+            AND CitationCount >= 200
+            ORDER BY CitationCount desc;
+        """
+        cur.execute(query)
+        ret = cur.fetchall()
+        # choose top 3
+        ret = list(ret)
+
+        if len(name.split()) == 2:
+            pattern = name.split()[0] + ' %% ' + name.split()[-1]
             query = f"""
                 SELECT * FROM MACG.authors
-                WHERE name in ("{name}", "{remove_middle_name(name)}", "{short2_name(name)}", "{short3_name(name)}") AND CitationCount >= 200
-                ORDER BY CitationCount;
+                WHERE name like "{pattern}"
+                AND CitationCount >= 200
+                ORDER BY CitationCount desc;
             """
-            # print(query)
             cur.execute(query)
-            ret = cur.fetchall()
-            # choose top 3
-            ret = ret[:5]
-            results.extend(ret)
-            if len(ret) > 0:
-                valid_names.append(name)
+            ret2 = cur.fetchall()
+            ret2 = list(ret2)
+            ret.extend(ret2)
+        else:
+            pattern = name.split()[0] + ' ' + name.split()[1][0] + '%% ' + name.split()[-1]
+            query = f"""
+                SELECT * FROM MACG.authors
+                WHERE name like "{pattern}"
+                AND CitationCount >= 200
+                ORDER BY CitationCount desc;
+            """
+            cur.execute(query)
+            ret2 = cur.fetchall()
+            ret2 = list(ret2)
+            ret.extend(ret2)
 
-            for row in ret:
-                id2year[str(row[0])] = original2year[name]
-                id2original[str(row[0])] = name
-    except pymysql.MySQLError as e:
-        print(f"Error querying database for {name}")
-        print(e)
+        if len(ret) > 0:            
+            name2ret[name] = ret
+    
+    return name2ret
+
+
+import multiprocessing as mp
+cnt = mp.cpu_count()
+with mp.Pool(cnt) as pool:
+    rets = pool.map(query, [list(original2year.keys())[i::cnt] for i in range(cnt)])
+
+results = []
+name2ret = {}
+for ret in rets:
+    name2ret.update(ret)
+    
+valid_names = list(name2ret.keys())
+for name, ret in name2ret.items():
+    results.extend(ret)
+    for row in ret:
+        id2year[str(row[0])] = original2year[name]
+        id2original[str(row[0])] = name
 
 
 ############################################################
@@ -130,35 +167,44 @@ for name in tqdm(original2year.keys()):
 print('len(valid_names):', len(valid_names))
 id2year.update(zip(award_df['MAGID'], award_df['year']))
 name2id = {}
+conn, cur = create_connection()
 for id in tqdm(ids):
-    try:
-        with conn.cursor() as cur:
-            query = f"""
-                SELECT * FROM MACG.authors
-                WHERE authorID="{id}";
-            """
-            # print(query)
-            cur.execute(query)
-            ret = cur.fetchall()
-            results.extend(ret)
-            if len(ret) > 0:
-                name2id[ret[0][2]] = id
-    except pymysql.MySQLError as e:
-        print(f"Error querying database for {id}")
-        print(e)
+    query = f"""
+        SELECT * FROM MACG.authors
+        WHERE authorID="{id}";
+    """
+    # print(query)
+    cur.execute(query)
+    ret = cur.fetchall()
+    results.extend(ret)
+    if len(ret) > 0:
+        name2id[ret[0][2]] = id
 conn.close()
 
 ########################################################
 # 5. 创建DataFrame并显示结果
 df = pd.DataFrame(results, columns=['authorID', 'rank', 'name', 'PaperCount', 'CitationCount'])
 df['authorID'] = df['authorID'].astype(str)
+df['CitationCount'] = df['CitationCount'].astype(int)
+df['PaperCount'] = df['PaperCount'].astype(int)
 df['original'] = df['authorID'].apply(lambda x: id2original.get(x, ''))
-df.sort_values(by=['name'], inplace=True, ascending=True)
+df['year'] = df['authorID'].apply(lambda x: id2year.get(x, 0))
+df = df[['original', 'authorID', 'name', 'PaperCount', 'CitationCount', 'year']]
+original2year = {k: v for k, v in original2year.items() if k not in valid_names}
+for k, v in original2year.items():
+    print(k, v)
+    # df.loc[len(df)] = [k, '', '', 0, 0, v]
+    df = df.append({'original': k, 'authorID': '', 'name': '', 'PaperCount': 0, 'CitationCount': 0, 'year': v}, ignore_index=True)
 
+# df.sort_values(by=['original'], inplace=True, ascending=True)
 for name in name2id.keys():
     df.drop(df[(df['name'] == name) & (df['authorID'] != name2id[name])].index, inplace=True)
 
-df.drop_duplicates(subset=['authorID'], keep='first', inplace=True)
+# df.drop_duplicates(subset=['authorID'], keep='first', inplace=True)
+df_empty_authorID = df[df['authorID'] == '']
+df_without_empty_authorID = df[df['authorID'] != ''].copy()
+df_without_empty_authorID.drop_duplicates(subset=['authorID'], keep='first', inplace=True)
+df = pd.concat([df_without_empty_authorID, df_empty_authorID])
 
 # name重复，则保留PaperCount最大且CitationCount最大的行，删掉PaperCount和CitationCount不是最大的行
 # 定义一个函数来检查每个分组
@@ -177,10 +223,8 @@ def filter_group(group):
 # df.sort_values(by=['name', 'PaperCount', 'CitationCount'], inplace=True, ascending=False)
 # df.drop_duplicates(subset=['name'], keep='first', inplace=True)
 
-df['CitationCount'] = df['CitationCount'].astype(int)
-df['PaperCount'] = df['PaperCount'].astype(int)
-df['rank'] = df['rank'].astype(int)
-df['year'] = df['authorID'].apply(lambda x: id2year[x] if x in id2year else 0)
+with open(f'out/{field}/not_found_name{typ}.json', 'w') as f:
+    json.dump(original2year, f)
 
 if typ == 1:
     df.to_csv(f'out/{field}/fellow.csv', index=False)
@@ -194,11 +238,6 @@ for row in df.iterrows():
         award_df.loc[len(award_df)] =[row['name'], row['year'], typ, row['authorID'], 'NULL']
 
 award_df.to_csv(f'out/{field}/award_authors_add{typ}.csv', index=False)
-
-# save not found name: year
-original2year = {k: v for k, v in original2year.items() if k not in valid_names}
-with open(f'out/{field}/not_found_name{typ}.json', 'w') as f:
-    json.dump(original2year, f)
 
 extract_candidate = False
 if extract_candidate:

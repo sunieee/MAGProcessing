@@ -12,7 +12,7 @@ import pandas as pd
 import re
 from collections import defaultdict
 
-if os.environ.get('field').count('fellow'):
+if os.environ.get('scholar') == '1':
     fellow = True
     from utils_scholar import *
 else:

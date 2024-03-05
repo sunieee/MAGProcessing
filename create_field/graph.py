@@ -6,7 +6,7 @@ import json
 import os
 import pandas as pd
 
-if os.environ.get('field').count('fellow'):
+if os.environ.get('scholar') == '1':
     from utils_scholar import *
     df_paper_author_filtered = df_paper_author
 else:

@@ -2,6 +2,7 @@ import pandas as pd
 import pymysql
 from datetime import datetime
 import os
+from tqdm import tqdm
 
 
 def create_connection(database='MACG'):
@@ -16,7 +17,11 @@ field = os.environ.get('field')
 database = os.environ.get('database', 'MACG')
 
 conn, cursor = create_connection()
-df_authors = pd.read_csv(f'out/{field}/authors.csv')
+if os.path.exists(f'out/{field}/authors.csv'):
+    df_authors = pd.read_csv(f'out/{field}/authors.csv')
+else:
+    df_authors = pd.read_csv(f'out/{field}/authors_all.csv')
+
 df_authors['authorID'] = df_authors['authorID'].astype(str)
 
 authorID_list = set(df_authors['authorID'].tolist())
@@ -64,6 +69,37 @@ else:
 df_paper_author['authorID'] = df_paper_author['authorID'].astype(str)
 df_paper_author['paperID'] = df_paper_author['paperID'].astype(str)
 df_papers['paperID'] = df_papers['paperID'].astype(str)
+
+
+if os.environ.get('scholar') == '1' and not os.path.exists(f'out/{field}/authors.csv'):
+    typ = 10    # turing
+    award_df = pd.DataFrame(columns=['original_author_name', 'year', 'type', 'MAGID', 'ARCID'])
+    for row in df_authors.iterrows():
+        row = row[1]
+        award_df.loc[len(award_df)] =[row['name'], row['year'], typ, row['authorID'], 'NULL']
+    award_df.to_csv(f'out/{field}/award_authors{typ}.csv', index=False)
+
+
+    for original in tqdm(set(df_authors['original'].to_list())):
+        df_authors_original = df_authors[df_authors['original'] == original].copy()
+        if len(df_authors_original) == 1:
+            continue
+        print("merge authors:", original, len(df_authors_original))
+        firstAuthorID = df_authors_original.iloc[0]['authorID']
+        firstPaperCount = df_authors_original.iloc[0]['PaperCount']
+        firstCitationCount = df_authors_original.iloc[0]['CitationCount']
+        for row in df_authors_original.to_dict('records')[1:]:
+            authorID = row['authorID']
+            df_paper_author.loc[df_paper_author['authorID'] == authorID, 'authorID'] = firstAuthorID
+            firstCitationCount += row['CitationCount']
+            firstPaperCount += row['PaperCount']
+        df_authors.loc[df_authors['original'] == original, 'PaperCount'] = firstPaperCount
+        df_authors.loc[df_authors['original'] == original, 'CitationCount'] = firstCitationCount
+    
+    df_authors.drop_duplicates(subset=['original'], inplace=True, keep='first')
+    df_authors.to_csv(f'out/{field}/authors.csv',index=False)
+    df_paper_author.to_csv(f"{path}/paper_author.csv", index=False)
+
 
 if 'PaperCount_field' not in df_authors.columns:
     paper_count = df_paper_author.groupby('authorID')['paperID'].count().reset_index(name='PaperCount_field')

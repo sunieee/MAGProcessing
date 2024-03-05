@@ -15,7 +15,7 @@ import re
 field = os.environ.get('field')
 suffix = '_ARC' if field.count("acl_anthology") else '_field'
 database = f'scigene_{field}_field'
-if field.count('fellow'):
+if os.environ.get('scholar') == '1':
     suffix = ''
     database = 'MACG'
 
@@ -145,8 +145,8 @@ def extract_paper(file):
         if col in papers.columns:
             papers = papers.drop(columns=[col])
     papers['paperID'] = papers['paperID'].astype(str)
-    papers['referenceCount'] = papers['paperID'].apply(lambda paperID: paperID2referenceCount[paperID])
-    papers['citationCount'] = papers['paperID'].apply(lambda paperID: paperID2citationCount[paperID])
+    papers['referenceCount'] = papers['paperID'].apply(lambda paperID: paperID2referenceCount.get(paperID, 0))
+    papers['citationCount'] = papers['paperID'].apply(lambda paperID: paperID2citationCount.get(paperID, 0))
     papers['venu'] = papers['paperID'].apply(lambda paperID: paperID2venue[paperID])
     papers['authorsName'] = papers['paperID'].apply(lambda paperID: paperID2authorsName[paperID])
     papers['abstract'] = papers['paperID'].apply(lambda paperID: paperID2abstract.get(paperID, ''))

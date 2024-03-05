@@ -14,7 +14,7 @@ import math
 import multiprocessing
 
 # import all needed variable from utils
-if os.environ.get('field').count('fellow'):
+if os.environ.get('scholar') == '1':
     from utils_scholar import *
 else:
     from utils import *
